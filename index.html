@@ -438,6 +438,12 @@ table.sg .ph small{display:block;font-weight:500;color:var(--ink-faint);font-siz
 .mt-act{border:1px solid var(--line);border-radius:9px;padding:7px 13px;font-size:13px;font-weight:600;color:var(--ink-soft);transition:all .15s}
 .mt-act:hover{border-color:var(--pine);color:var(--pine)}
 .mt-act.done{border-color:var(--pine);background:var(--pine);color:#fff}
+.dir-actions{display:flex;gap:6px;flex:none}
+.dir-actions button{width:30px;height:30px;border-radius:8px;border:1px solid var(--line);background:var(--surface);
+  display:grid;place-items:center;color:var(--ink-soft);transition:all .15s}
+.dir-actions button:hover{border-color:var(--pine);color:var(--pine)}
+.dir-actions button svg{width:15px;height:15px}
+.dir-card{align-items:center}
 </style>
 </head>
 <body>
@@ -471,6 +477,11 @@ table.sg .ph small{display:block;font-weight:500;color:var(--ink-faint);font-siz
       <div id="fbErr" style="color:var(--urgente);font-size:13px;font-weight:600;min-height:18px;margin-bottom:8px"></div>
       <button class="btn-primary" id="fbBtn" style="width:100%;justify-content:center">Entrar</button>
     </div>
+
+    <button class="gbtn" id="installBtn" style="display:none;margin-top:14px;justify-content:center">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+      Instalar app en este dispositivo
+    </button>
   </div>
 </div>
 
@@ -619,6 +630,10 @@ table.sg .ph small{display:block;font-weight:500;color:var(--ink-faint);font-siz
   </div>
 </div>
 
+<div class="modal-bg" id="personBg">
+  <div class="modal" id="personModal"></div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -654,12 +669,12 @@ const CONFIG = {
   // Mientras 'apiKey' diga "PEGA-AQUI", la app corre en MODO DEMO (ideal para la presentación).
   // En cuanto pegues tus claves reales, se activa solo el modo Firebase (login por correo/contraseña).
   firebaseConfig: {
-    apiKey: 'PEGA-AQUI',
-    authDomain: '',
-    projectId: '',
-    storageBucket: '',
-    messagingSenderId: '',
-    appId: ''
+    apiKey: 'AIzaSyDK_DLRJ7UY7hMABXgHOvbsztNVM7I8LQU',
+    authDomain: 'comunica-bilbao.firebaseapp.com',
+    projectId: 'comunica-bilbao',
+    storageBucket: 'comunica-bilbao.firebasestorage.app',
+    messagingSenderId: '557394863474',
+    appId: '1:557394863474:web:cc2b20e80c01ce5f4029eb'
   },
   DOMINIO: 'tudominio.edu.mx', // para cuando se active el login con dominio del colegio
 };
@@ -1485,19 +1500,25 @@ function renderDocs(){
   </div>`).join('');
 }
 
-/* ---------- DIRECTORIO ---------- */
+/* ---------- DIRECTORIO / PERSONAL ---------- */
+const esDireccion = ()=> me && me.role==='direccion';
 function renderDir(){
   const order=['Dirección','Coordinación','Kinder','Primaria','Secundaria','Bachillerato','Administración'];
   const areas={};
   USERS.forEach(u=>{(areas[u.area]=areas[u.area]||[]).push(u);});
   const names=Object.keys(areas).sort((a,b)=>order.indexOf(a)-order.indexOf(b));
+  const admin=esDireccion();
   const card=u=>`<div class="dir-card">
     <div class="avatar" style="background:${avColor(u.name)}">${initials(u.name)}</div>
-    <div><div class="d-name">${u.name}</div><div class="d-role">${u.roleLabel}</div></div>
+    <div style="flex:1;min-width:0"><div class="d-name">${u.name}</div><div class="d-role">${u.roleLabel}</div>${u.email?`<div class="d-area">${escapeHtml(u.email)}</div>`:''}</div>
+    ${admin?`<div class="dir-actions">
+      <button onclick="openPersonModal('${u.id}')" title="Editar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg></button>
+      <button onclick="delPerson('${u.id}')" title="Dar de baja"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+    </div>`:''}
   </div>`;
-  return names.map(area=>{
+  const addBtn = admin? `<div class="row-ctrl" style="margin-bottom:18px"><button class="btn-primary" onclick="openPersonModal()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg> Agregar persona</button></div>` : '';
+  const body = names.map(area=>{
     const list=areas[area];
-    // Administración se muestra por subárea (el submenú)
     if(area==='Administración'){
       const subs={};
       list.forEach(u=>{(subs[u.subarea||'General']=subs[u.subarea||'General']||[]).push(u);});
@@ -1508,6 +1529,82 @@ function renderDir(){
     }
     return `<div class="area-label">${area}</div><div class="dir-grid">${list.map(card).join('')}</div>`;
   }).join('');
+  return addBtn + body;
+}
+
+/* ----- Alta/edición/baja de personal (solo Dirección) ----- */
+const AREAS_PERSONA=['Dirección','Coordinación','Kinder','Primaria','Secundaria','Bachillerato','Administración'];
+const SUBAREAS_PERSONA=['Administración','Transporte','Mantenimiento e Intendencia','Seguridad','Enfermería','Cafetería'];
+function autoLabel(role,area,subarea,cargo){
+  if(cargo) return cargo;
+  if(role==='direccion') return 'Dirección';
+  if(role==='coordinacion') return 'Coordinación';
+  if(role==='docente') return 'Docente · '+area;
+  return subarea||area; // personal
+}
+function openPersonModal(id){
+  if(!esDireccion()) return;
+  const u = id? USERS.find(x=>String(x.id)===String(id)) : null;
+  const sel=(opts,val)=>opts.map(o=>`<option value="${o}"${o===val?' selected':''}>${o}</option>`).join('');
+  const roleVal=u?u.role:'docente', areaVal=u?u.area:'Primaria';
+  document.getElementById('personModal').innerHTML=`
+    <h3>${u?'Editar persona':'Agregar persona'}</h3>
+    <p class="m-sub">Los datos y el rol se guardan en el sistema. La contraseña de acceso se crea aparte en Firebase.</p>
+    <input type="hidden" id="pId" value="${u?u.id:''}">
+    <div class="field"><label>Nombre</label><input id="pName" type="text" value="${u?escapeHtml(u.name):''}" placeholder="Nombre completo"></div>
+    <div class="field"><label>Correo institucional</label><input id="pEmail" type="email" value="${u&&u.email?escapeHtml(u.email):''}" placeholder="nombre@colegio…"></div>
+    <div class="field"><label>Rol</label><select id="pRole">
+      <option value="direccion"${roleVal==='direccion'?' selected':''}>Dirección</option>
+      <option value="coordinacion"${roleVal==='coordinacion'?' selected':''}>Coordinación</option>
+      <option value="docente"${roleVal==='docente'?' selected':''}>Docente</option>
+      <option value="personal"${roleVal==='personal'?' selected':''}>Personal (administración/servicios)</option>
+    </select></div>
+    <div class="field"><label>Área / sección</label><select id="pArea" onchange="onPersonAreaChange()">${sel(AREAS_PERSONA,areaVal)}</select></div>
+    <div class="field" id="pSubWrap" style="display:${areaVal==='Administración'?'block':'none'}"><label>Subárea</label><select id="pSub">${sel(SUBAREAS_PERSONA,u&&u.subarea?u.subarea:'Administración')}</select></div>
+    <div class="field"><label>Cargo / puesto <span class="opt">(opcional)</span></label><input id="pCargo" type="text" value="${u&&u.roleLabel?escapeHtml(u.roleLabel):''}" placeholder="Ej. Coord. Académica"></div>
+    <div class="modal-actions">
+      ${u?`<button class="btn-ghost" onclick="delPerson('${u.id}')" style="margin-right:auto;color:var(--urgente)">Dar de baja</button>`:''}
+      <button class="btn-ghost" onclick="closePersonModal()">Cancelar</button>
+      <button class="btn-primary" onclick="savePerson()">${u?'Guardar':'Agregar'}</button>
+    </div>`;
+  document.getElementById('personBg').classList.add('active');
+}
+function onPersonAreaChange(){
+  const area=document.getElementById('pArea').value;
+  document.getElementById('pSubWrap').style.display = area==='Administración'?'block':'none';
+}
+function closePersonModal(){document.getElementById('personBg').classList.remove('active');}
+function savePerson(){
+  const id=document.getElementById('pId').value;
+  const name=document.getElementById('pName').value.trim();
+  const email=document.getElementById('pEmail').value.trim();
+  const role=document.getElementById('pRole').value;
+  const area=document.getElementById('pArea').value;
+  const subarea= area==='Administración'? document.getElementById('pSub').value : undefined;
+  const cargo=document.getElementById('pCargo').value.trim();
+  if(!name){toast('Escribe el nombre');return;}
+  if(!email){toast('Escribe el correo');return;}
+  const roleLabel=autoLabel(role,area,subarea,cargo);
+  if(id){
+    const u=USERS.find(x=>String(x.id)===String(id));
+    Object.assign(u,{name,email,role,area,subarea,roleLabel});
+    if(window.CLOUD) CLOUD.saveUsuario(u);
+    toast('Persona actualizada');
+  } else {
+    const u={id:'u'+Date.now(), name, email, role, area, subarea, roleLabel};
+    USERS.push(u);
+    if(window.CLOUD) CLOUD.saveUsuario(u);
+    toast('Persona agregada');
+  }
+  closePersonModal(); render();
+}
+function delPerson(id){
+  if(!esDireccion()) return;
+  const u=USERS.find(x=>String(x.id)===String(id)); if(!u) return;
+  if(!confirm(`¿Dar de baja a ${u.name}? Dejará de tener acceso. (La cuenta de correo se elimina aparte en Firebase.)`)) return;
+  USERS=USERS.filter(x=>String(x.id)!==String(id));
+  if(window.CLOUD) CLOUD.removeUsuario(id);
+  closePersonModal(); toast('Persona dada de baja'); render();
 }
 
 /* ---------- FILTROS ---------- */
@@ -1618,6 +1715,7 @@ function toast(msg){
   toastTimer=setTimeout(()=>t.classList.remove('show'),2600);
 }
 document.getElementById('modalBg').addEventListener('click',e=>{if(e.target.id==='modalBg')closeCompose();});
+document.getElementById('personBg').addEventListener('click',e=>{if(e.target.id==='personBg')closePersonModal();});
 
 /* ---------- INIT ---------- */
 renderDemoUsers();
@@ -1630,6 +1728,22 @@ if(document.getElementById('barLogo'))document.getElementById('barLogo').src=ASS
 if('serviceWorker' in navigator && location.protocol.startsWith('http')){
   window.addEventListener('load', ()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
 }
+/* Botón de instalar la app (PWA) */
+(function(){
+  const btn=document.getElementById('installBtn');
+  if(!btn) return;
+  const standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  let deferred=null;
+  window.addEventListener('beforeinstallprompt', e=>{ e.preventDefault(); deferred=e; if(!standalone) btn.style.display='flex'; });
+  window.addEventListener('appinstalled', ()=>{ btn.style.display='none'; });
+  if(isIOS && !standalone){ btn.style.display='flex'; }   // iOS no dispara el evento: mostramos instrucciones
+  btn.addEventListener('click', async ()=>{
+    if(deferred){ deferred.prompt(); await deferred.userChoice; deferred=null; btn.style.display='none'; }
+    else if(isIOS){ alert('Para instalar en iPhone/iPad:\n\n1. Toca el botón Compartir (cuadro con flecha hacia arriba).\n2. Elige "Agregar a pantalla de inicio".'); }
+    else { alert('En Chrome o Edge: abre el menú del navegador y elige "Instalar app". (Debe abrirse desde la dirección web, no como archivo local.)'); }
+  });
+})();
 </script>
 
 <!-- ============================================================
@@ -1642,9 +1756,23 @@ const CFG = window.APP_CONFIG && window.APP_CONFIG.firebaseConfig;
 const ACTIVE = CFG && CFG.apiKey && CFG.apiKey !== 'PEGA-AQUI';
 if (ACTIVE) {
   const V = 'https://www.gstatic.com/firebasejs/10.12.2';
-  const { initializeApp } = await import(`${V}/firebase-app.js`);
-  const { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } = await import(`${V}/firebase-auth.js`);
-  const { getFirestore, collection, getDocs, doc, setDoc, updateDoc, deleteDoc, arrayUnion } = await import(`${V}/firebase-firestore.js`);
+  let initializeApp, getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged,
+      getFirestore, collection, getDocs, doc, setDoc, updateDoc, deleteDoc, arrayUnion;
+  try {
+    ({ initializeApp } = await import(`${V}/firebase-app.js`));
+    ({ getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } = await import(`${V}/firebase-auth.js`));
+    ({ getFirestore, collection, getDocs, doc, setDoc, updateDoc, deleteDoc, arrayUnion } = await import(`${V}/firebase-firestore.js`));
+  } catch (err) {
+    console.error('No se pudo cargar Firebase:', err);
+    const card = document.querySelector('.login-card');
+    if (card) {
+      const n = document.createElement('div');
+      n.style.cssText = 'margin-top:14px;padding:10px 12px;border-radius:10px;background:#FBEAE7;color:#C0392B;font-size:13px;font-weight:600;text-align:left';
+      n.textContent = 'No se pudo cargar Firebase. Abre la app desde su dirección web (https://…), no como archivo local, y revisa tu conexión a internet.';
+      card.appendChild(n);
+    }
+    throw err; // detiene la inicialización de Firebase; la pantalla queda con el aviso
+  }
 
   const app = initializeApp(CFG);
   const auth = getAuth(app);
@@ -1702,6 +1830,8 @@ if (ACTIVE) {
     saveTarea: t => setDoc(doc(db, 'tareas_personales', String(t.id)), { owner: t.owner, title: t.title, due: t.due || '', time: t.time || '', reminders: t.reminders || [], notes: t.notes || '', done: !!t.done, ts: t.ts }),
     removeTarea: id => deleteDoc(doc(db, 'tareas_personales', String(id))),
     saveOrden: o => setDoc(doc(db, 'mantenimiento', String(o.id)), { title: o.title, desc: o.desc || '', loc: o.loc || '', prio: o.prio, reporter: o.reporter, reporterId: o.reporterId, ts: o.ts, status: o.status, ...(o.doneTs ? { doneTs: o.doneTs } : {}) }),
+    saveUsuario: u => setDoc(doc(db, 'usuarios', String(u.id)), { name: u.name, email: u.email || '', role: u.role, roleLabel: u.roleLabel || '', area: u.area, ...(u.subarea ? { subarea: u.subarea } : {}) }),
+    removeUsuario: id => deleteDoc(doc(db, 'usuarios', String(id))),
     signOut: () => signOut(auth)
   };
 
