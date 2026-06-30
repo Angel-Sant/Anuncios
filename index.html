@@ -1755,6 +1755,13 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
 const CFG = window.APP_CONFIG && window.APP_CONFIG.firebaseConfig;
 const ACTIVE = CFG && CFG.apiKey && CFG.apiKey !== 'PEGA-AQUI';
 if (ACTIVE) {
+  // --- UI primero: en cuanto hay configuración, mostramos el formulario real (sin esperar al SDK) ---
+  const hide = id => { const e = document.getElementById(id); if (e) e.style.display = 'none'; };
+  hide('gbtn'); hide('demoDivider'); hide('demoUsers');
+  const authBox = document.getElementById('fbAuth'); if (authBox) authBox.style.display = 'block';
+  const errEl = document.getElementById('fbErr');
+  const showErr = m => { if (errEl) errEl.textContent = m; };
+
   const V = 'https://www.gstatic.com/firebasejs/10.12.2';
   let initializeApp, getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged,
       getFirestore, collection, getDocs, doc, setDoc, updateDoc, deleteDoc, arrayUnion;
@@ -1764,26 +1771,13 @@ if (ACTIVE) {
     ({ getFirestore, collection, getDocs, doc, setDoc, updateDoc, deleteDoc, arrayUnion } = await import(`${V}/firebase-firestore.js`));
   } catch (err) {
     console.error('No se pudo cargar Firebase:', err);
-    const card = document.querySelector('.login-card');
-    if (card) {
-      const n = document.createElement('div');
-      n.style.cssText = 'margin-top:14px;padding:10px 12px;border-radius:10px;background:#FBEAE7;color:#C0392B;font-size:13px;font-weight:600;text-align:left';
-      n.textContent = 'No se pudo cargar Firebase. Abre la app desde su dirección web (https://…), no como archivo local, y revisa tu conexión a internet.';
-      card.appendChild(n);
-    }
-    throw err; // detiene la inicialización de Firebase; la pantalla queda con el aviso
+    showErr('No se pudo cargar Firebase. Abre la app desde su dirección web (https://…), no como archivo local, y revisa tu conexión.');
+    throw err;
   }
 
   const app = initializeApp(CFG);
   const auth = getAuth(app);
   const db = getFirestore(app);
-
-  // --- UI: ocultar demo, mostrar formulario real ---
-  const hide = id => { const e = document.getElementById(id); if (e) e.style.display = 'none'; };
-  hide('gbtn'); hide('demoDivider'); hide('demoUsers');
-  const authBox = document.getElementById('fbAuth'); if (authBox) authBox.style.display = 'block';
-  const errEl = document.getElementById('fbErr');
-  const showErr = m => { if (errEl) errEl.textContent = m; };
 
   document.getElementById('fbBtn').addEventListener('click', async () => {
     showErr('');

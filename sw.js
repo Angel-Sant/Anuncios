@@ -1,7 +1,7 @@
 /* Comunica · Colegio Bilbao — Service Worker
    Permite instalar la app y usarla sin conexión (la pantalla y los datos demo).
    Sube este archivo junto a index.html (misma carpeta) en GitHub Pages. */
-const CACHE = 'comunica-v1';
+const CACHE = 'comunica-v2';
 const ASSETS = [
   './', './index.html', './manifest.webmanifest',
   './icon-192.png', './icon-512.png', './icon-maskable-512.png'
