@@ -1868,6 +1868,7 @@ if (ACTIVE) {
   // --- Métodos de escritura que usa la app ---
   const serAviso = a => ({
     title: a.title, body: a.body, prio: a.prio, aud: a.aud, author: a.author, ts: a.ts, read: a.read || [],
+    notified: false, sentReminders: [],
     ...(a.event ? { event: { time: a.event.time || '', cat: a.event.cat, color: a.event.color, reminders: a.event.reminders || [], date: a.event.date.toISOString() } } : {}),
     ...(a.file ? { file: { name: a.file.name } } : {})
   });
@@ -1877,7 +1878,7 @@ if (ACTIVE) {
     saveAbsence: ab => setDoc(doc(db, 'absences', `${ab.teacherId}_${ab.day}`), { teacherId: ab.teacherId, day: ab.day, motivo: ab.motivo || 'falta', asign: ab.asign }),
     removeAbsence: ab => deleteDoc(doc(db, 'absences', `${ab.teacherId}_${ab.day}`)),
     saveSchedule: (uid, mat) => setDoc(doc(db, 'horarios', uid), { matJson: JSON.stringify(mat) }),
-    saveTarea: t => setDoc(doc(db, 'tareas_personales', String(t.id)), { owner: t.owner, title: t.title, due: t.due || '', time: t.time || '', reminders: t.reminders || [], notes: t.notes || '', done: !!t.done, ts: t.ts }),
+    saveTarea: t => setDoc(doc(db, 'tareas_personales', String(t.id)), { owner: t.owner, title: t.title, due: t.due || '', time: t.time || '', reminders: t.reminders || [], sentReminders: t.sentReminders || [], notes: t.notes || '', done: !!t.done, ts: t.ts }),
     removeTarea: id => deleteDoc(doc(db, 'tareas_personales', String(id))),
     saveOrden: o => setDoc(doc(db, 'mantenimiento', String(o.id)), { title: o.title, desc: o.desc || '', loc: o.loc || '', prio: o.prio, reporter: o.reporter, reporterId: o.reporterId, ts: o.ts, status: o.status, ...(o.doneTs ? { doneTs: o.doneTs } : {}) }),
     saveUsuario: u => setDoc(doc(db, 'usuarios', String(u.id)), { name: u.name, email: u.email || '', role: u.role, roleLabel: u.roleLabel || '', area: u.area, ...(u.subarea ? { subarea: u.subarea } : {}) }),
