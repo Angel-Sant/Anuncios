@@ -12,6 +12,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Comunica">
+<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -444,6 +445,8 @@ table.sg .ph small{display:block;font-weight:500;color:var(--ink-faint);font-siz
 .dir-actions button:hover{border-color:var(--pine);color:var(--pine)}
 .dir-actions button svg{width:15px;height:15px}
 .dir-card{align-items:center}
+.nav-item.notif-on{color:var(--pine)}
+.nav-item.notif-on svg{color:var(--pine)}
 </style>
 </head>
 <body>
@@ -512,6 +515,10 @@ table.sg .ph small{display:block;font-weight:500;color:var(--ink-faint);font-siz
     <button class="nav-item" data-view="directorio" onclick="go('directorio')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
       Directorio
+    </button>
+    <button class="nav-item" id="notifBtn" onclick="toggleNotif()" style="display:none">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+      <span id="notifLabel">Activar notificaciones</span>
     </button>
     <button class="nav-item nav-exit" onclick="signOut()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/></svg>
@@ -896,6 +903,7 @@ function enterApp(user){        // usado por demo y por Firebase (tras autentica
     `<div class="avatar" style="background:${avColor(me.name)}">${initials(me.name)}</div>
      <div><div class="du-name">${me.name}</div><div class="du-role">${me.roleLabel}</div></div>`;
   document.getElementById('newBtn').style.display = PUEDE_PUBLICAR.includes(me.role) ? '' : 'none';
+  if(window.notifOnLogin) window.notifOnLogin(me);   // etiqueta la suscripción con área/rol
   go('avisos');
 }
 window.enterApp = enterApp;
@@ -1744,6 +1752,54 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
     else { alert('En Chrome o Edge: abre el menú del navegador y elige "Instalar app". (Debe abrirse desde la dirección web, no como archivo local.)'); }
   });
 })();
+
+/* ===================== NOTIFICACIONES PUSH (OneSignal) ===================== */
+let __os = null, __osReady = false, __pendingTagUser = null;
+function refreshNotifBtn(){
+  const btn = document.getElementById('notifBtn'), lbl = document.getElementById('notifLabel');
+  if(!btn || !lbl || !__osReady) return;
+  btn.style.display = '';
+  let enabled = false;
+  try { enabled = !!__os.Notifications.permission; } catch(e){}
+  lbl.textContent = enabled ? 'Notificaciones activadas' : 'Activar notificaciones';
+  btn.classList.toggle('notif-on', enabled);
+}
+async function toggleNotif(){
+  if(!__osReady){ toast('Las notificaciones aún se están cargando…'); return; }
+  try {
+    if(__os.Notifications.permission){ toast('Ya tienes las notificaciones activadas'); }
+    else { await __os.Notifications.requestPermission(); refreshNotifBtn(); }
+  } catch(e){ toast('No se pudo activar en este dispositivo'); }
+}
+// El módulo/lo demás llama a esto al entrar: etiqueta la suscripción con el área/rol.
+window.notifOnLogin = function(u){
+  if(!u) return;
+  if(!__osReady){ __pendingTagUser = u; return; }   // se aplicará al terminar de cargar
+  applyTags(u);
+};
+async function applyTags(u){
+  try {
+    await __os.User.addTags({ area: u.area || '', rol: u.role || '', seccion: u.subarea || u.area || '' });
+    if(u.id != null) await __os.login(String(u.id));
+  } catch(e){ /* silencioso */ }
+}
+if(location.protocol.startsWith('http')){
+  window.OneSignalDeferred = window.OneSignalDeferred || [];
+  window.OneSignalDeferred.push(async function(OneSignal){
+    try {
+      await OneSignal.init({
+        appId: '7298a4ca-5e74-47c5-a7ef-33d12c46749e',
+        serviceWorkerParam: { scope: '/Anuncios/' },
+        serviceWorkerPath: 'Anuncios/sw.js',
+        allowLocalhostAsSecureOrigin: true
+      });
+      __os = OneSignal; __osReady = true;
+      refreshNotifBtn();
+      try { OneSignal.Notifications.addEventListener('permissionChange', refreshNotifBtn); } catch(e){}
+      if(__pendingTagUser){ applyTags(__pendingTagUser); __pendingTagUser = null; }
+    } catch(e){ console.warn('OneSignal no se pudo iniciar:', e); }
+  });
+}
 </script>
 
 <!-- ============================================================
