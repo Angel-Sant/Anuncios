@@ -28,7 +28,7 @@ const db = admin.firestore();
    'todos' = a todos; lo demás filtra por etiqueta.               */
 function targetFor(aud) {
   switch (aud) {
-    case 'todos':        return { included_segments: ['Subscribed Users'] };
+    case 'todos':        return { included_segments: ['Total Subscriptions'] };
     case 'docentes':     return { filters: [{ field: 'tag', key: 'rol',  relation: '=', value: 'docente' }] };
     case 'coords':       return { filters: [{ field: 'tag', key: 'rol',  relation: '=', value: 'coordinacion' },
                                             { operator: 'OR' },
@@ -44,7 +44,7 @@ function targetFor(aud) {
     case 'admin-of':     return { filters: [{ field: 'tag', key: 'seccion', relation: '=', value: 'Administración' }] };
     case 'enfermeria':   return { filters: [{ field: 'tag', key: 'seccion', relation: '=', value: 'Enfermería' }] };
     case 'cafeteria':    return { filters: [{ field: 'tag', key: 'seccion', relation: '=', value: 'Cafetería' }] };
-    default:             return { included_segments: ['Subscribed Users'] };
+    default:             return { included_segments: ['Total Subscriptions'] };
   }
 }
 
