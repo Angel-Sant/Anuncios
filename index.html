@@ -184,8 +184,18 @@ input,textarea,select{font-family:inherit;font-size:15px;color:var(--ink)}
 .cal-day.today{background:var(--pine-tint);border-color:var(--pine)}
 .cal-day .dnum{font-size:12.5px;font-weight:600;color:var(--ink-soft)}
 .cal-day.today .dnum{color:var(--pine)}
-.cal-ev{font-size:11px;font-weight:600;color:#fff;border-radius:5px;padding:2px 5px;margin-top:3px;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cal-ev{font-size:11px;font-weight:600;color:#fff;border-radius:5px;padding:2px 5px;margin-top:3px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cal-ev:hover{filter:brightness(1.08)}
+.ev-cat{display:inline-block;color:#fff;font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;padding:3px 9px;border-radius:20px}
+.ev-aud{font-size:13px;color:var(--ink-soft);margin:6px 0}
+.ev-body{margin:12px 0;line-height:1.5;white-space:pre-wrap}
+.ev-rem-title{font-size:12px;font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.4px;margin:14px 0 6px}
+.ev-rem{display:flex;flex-wrap:wrap;gap:6px}
+.ev-rem span{background:var(--surface-2);border:1px solid var(--line);border-radius:20px;padding:4px 10px;font-size:13px}
+.ev-file{display:inline-flex;align-items:center;gap:8px;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-size:14px;font-weight:600;color:var(--pine);text-decoration:none}
+.ev-file svg{width:16px;height:16px}
+.ev-file.no-dl{color:var(--ink-soft);font-weight:500}
+.ev-note{color:var(--ink-faint);font-weight:400;font-size:12px}
 
 /* documentos / directorio */
 .doc{display:flex;align-items:center;gap:14px;background:var(--surface);border:1px solid var(--line);
@@ -639,6 +649,10 @@ table.sg .ph small{display:block;font-weight:500;color:var(--ink-faint);font-siz
 
 <div class="modal-bg" id="personBg">
   <div class="modal" id="personModal"></div>
+</div>
+
+<div class="modal-bg" id="eventBg">
+  <div class="modal" id="eventModal"></div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -1111,7 +1125,7 @@ function renderCalendario(){
     const evs=EVENTOS.filter(e=>e.date.getDate()===d&&e.date.getMonth()===m&&e.date.getFullYear()===y);
     cells+=`<div class="cal-day in ${isToday?'today':''}">
       <div class="dnum">${d}</div>
-      ${evs.map(e=>`<div class="cal-ev" style="background:${e.color}" title="${e.title}">${e.title}</div>`).join('')}
+      ${evs.map(e=>`<div class="cal-ev" style="background:${e.color}" title="${e.title}" onclick="openEvent(${EVENTOS.indexOf(e)})">${e.title}</div>`).join('')}
     </div>`;
   }
   const totalCells=first+days; const trail=(7-totalCells%7)%7;
@@ -1129,6 +1143,36 @@ function renderCalendario(){
 }
 function calMove(n){calDate=new Date(calDate.getFullYear(),calDate.getMonth()+n,1);render();}
 
+const CAT_LABEL={academico:'Académico',administrativo:'Administrativo',junta:'Junta'};
+function openEvent(i){
+  const ev=EVENTOS[i]; if(!ev) return;
+  const d=ev.date;
+  const sameDay=a=>a.date.getDate()===d.getDate()&&a.date.getMonth()===d.getMonth()&&a.date.getFullYear()===d.getFullYear();
+  // Busca el aviso que originó este evento para mostrar toda la info (cuerpo, recordatorios, adjunto).
+  const src=AVISOS.find(a=>a.event&&a.title===ev.title&&a.event.date&&sameDay({date:new Date(a.event.date)}));
+  const time = (src&&src.event&&src.event.time) || ev.time || '';
+  const reminders = (src&&src.event&&src.event.reminders) || ev.reminders || [];
+  const body = src? src.body : (ev.body||'');
+  const file = src? src.file : ev.file;
+  const audLabel = src? audById(src.aud).label : '';
+  const fechaTxt = `${d.getDate()} de ${MESES[d.getMonth()]} de ${d.getFullYear()}${time?` · ${time}`:''}`;
+  const fileHtml = file ? (file.url
+      ? `<a class="ev-file" href="${file.url}" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>${escapeHtml(file.name)}</a>`
+      : `<div class="ev-file no-dl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>${escapeHtml(file.name)} <span class="ev-note">(adjunto)</span></div>`)
+    : '';
+  document.getElementById('eventModal').innerHTML=`
+    <div class="ev-cat" style="background:${ev.color}">${CAT_LABEL[ev.cat]||ev.cat||'Evento'}</div>
+    <h3 style="margin:8px 0 2px">${escapeHtml(ev.title)}</h3>
+    <p class="m-sub" style="margin-top:0">${fechaTxt}</p>
+    ${audLabel?`<div class="ev-aud">Dirigido a: ${audLabel}</div>`:''}
+    ${body?`<p class="ev-body">${escapeHtml(body)}</p>`:''}
+    ${reminders.length?`<div class="ev-rem-title">Recordatorios</div><div class="ev-rem">${reminders.map(r=>`<span>${r}</span>`).join('')}</div>`:''}
+    ${fileHtml?`<div class="ev-rem-title">Documento adjunto</div>${fileHtml}`:''}
+    <div class="modal-actions"><button class="btn-primary" onclick="closeEventModal()">Cerrar</button></div>`;
+  document.getElementById('eventBg').classList.add('active');
+}
+function closeEventModal(){document.getElementById('eventBg').classList.remove('active');}
+
 /* ====================== HORARIOS Y SUPLENCIAS ====================== */
 const esManager = ()=>PUEDE_PUBLICAR.includes(me.role);
 
@@ -1143,9 +1187,12 @@ function renderHorarios(){
 function setHorTab(t){horTab=t;render();}
 
 /* ----- Editor de horarios ----- */
+function emptyMat(){ return Array.from({length:5},()=>Array(7).fill(null)); }
+function schedOf(uid){ if(!SCHEDULES[uid]) SCHEDULES[uid]=emptyMat(); return SCHEDULES[uid]; }
 function renderEditorHorarios(){
   const docs = docentes();
-  if(!horTeacher) horTeacher = docs[0].id;
+  if(!docs.length) return `<div style="padding:40px;text-align:center;color:var(--ink-faint)">No hay docentes dados de alta todavía. Agrégalos en Directorio.</div>`;
+  if(!horTeacher || !docs.some(d=>String(d.id)===String(horTeacher))) horTeacher = docs[0].id;
   const teacherSel = `<div class="ctrl"><label>Profesor</label>
     <select onchange="selTeacher(this.value)">
       ${SECCIONES.map(s=>`<optgroup label="${s}">${docentesDe(s).map(u=>`<option value="${u.id}"${u.id===horTeacher?' selected':''}>${u.name}</option>`).join('')}</optgroup>`).join('')}
@@ -1160,7 +1207,7 @@ function renderEditorHorarios(){
       Plantilla</button>` : '';
   const hint = esManager() ? `<p class="fc-sub" style="margin:-6px 0 14px">Toca una celda para alternar entre <strong>clase</strong> y <strong>hora libre</strong>. La hora libre es la que se usa para asignar suplencias.</p>` : '';
 
-  const mat = SCHEDULES[horTeacher];
+  const mat = schedOf(horTeacher);
   const head = `<tr><th class="ph">Hora</th>${DIAS.map(d=>`<th>${d}</th>`).join('')}</tr>`;
   const rows = PERIODOS.map((per,p)=>`<tr>
     <td class="ph">${per.n}ª<small>${per.time}</small></td>
@@ -1178,14 +1225,14 @@ function renderEditorHorarios(){
 }
 function selTeacher(id){horTeacher=id;render();}
 function toggleCell(uid,d,p){
-  const m=SCHEDULES[uid];
+  const m=schedOf(uid);
   m[d][p] = m[d][p] ? null : {group:(GRUPOS_SEC[userById(uid).area]||['G'])[(p+d)%(GRUPOS_SEC[userById(uid).area]||['G']).length]};
   if(window.CLOUD) CLOUD.saveSchedule(uid, SCHEDULES[uid]);
   render();
 }
 function downloadPlantilla(){
   let csv='profesor_id,profesor,dia(0-4),periodo(1-7),grupo\n';
-  docentes().forEach(u=>{for(let d=0;d<5;d++)for(let p=0;p<7;p++){const c=SCHEDULES[u.id][d][p];if(c)csv+=`${u.id},${u.name},${d},${p+1},${c.group}\n`;}});
+  docentes().forEach(u=>{for(let d=0;d<5;d++)for(let p=0;p<7;p++){const c=schedOf(u.id)[d][p];if(c)csv+=`${u.id},${u.name},${d},${p+1},${c.group}\n`;}});
   const blob=new Blob([csv],{type:'text/csv'});const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);a.download='horarios_plantilla.csv';a.click();URL.revokeObjectURL(a.href);
   toast('Plantilla descargada');
@@ -1212,7 +1259,7 @@ function importCSV(input){
 /* ----- Motor de suplencias (equitativo) ----- */
 // ¿La persona c está ocupada el día d, periodo p? (clase propia o ya cubriendo otra falta)
 function ocupado(cid,d,p){
-  if(SCHEDULES[cid][d][p]) return true;
+  if(schedOf(cid)[d][p]) return true;
   return absences.some(ab=>ab.day===d && ab.asign.some(a=>a.p===p && a.subId===cid));
 }
 function ausenteEseDia(cid,d){return absences.some(ab=>ab.teacherId===cid && ab.day===d);}
@@ -1222,7 +1269,7 @@ function asignarSuplencias(teacherId,d,periodos){
   const pool=docentesDe(sec).filter(u=>u.id!==teacherId);
   const asign=[];
   for(let p=0;p<7;p++){
-    const cell=SCHEDULES[teacherId][d][p];
+    const cell=schedOf(teacherId)[d][p];
     if(!cell) continue;                       // hora libre del ausente: no hay que cubrir
     if(periodos && !periodos.includes(p)) continue;  // reunión: solo las horas elegidas
     const libres=pool.filter(c=>!ocupado(c.id,d,p) && !ausenteEseDia(c.id,d));
@@ -1701,7 +1748,7 @@ function publish(){
     const time=document.getElementById('fTime').value||'';
     aviso.event={date:new Date(y,m-1,d), time, cat, color:CAT_COLOR[cat], reminders:[...composeReminders]};
     // Lo agrega también al calendario
-    EVENTOS.push({date:new Date(y,m-1,d), title, cat, color:CAT_COLOR[cat]});
+    EVENTOS.push({date:new Date(y,m-1,d), title, cat, color:CAT_COLOR[cat], time, reminders:[...composeReminders], body, file: aviso.file||null, aud});
   }
 
   AVISOS.unshift(aviso);
@@ -1724,6 +1771,7 @@ function toast(msg){
 }
 document.getElementById('modalBg').addEventListener('click',e=>{if(e.target.id==='modalBg')closeCompose();});
 document.getElementById('personBg').addEventListener('click',e=>{if(e.target.id==='personBg')closePersonModal();});
+document.getElementById('eventBg').addEventListener('click',e=>{if(e.target.id==='eventBg')closeEventModal();});
 
 /* ---------- INIT ---------- */
 renderDemoUsers();
