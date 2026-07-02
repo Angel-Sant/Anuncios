@@ -1789,6 +1789,7 @@ if(location.protocol.startsWith('http')){
     try {
       await OneSignal.init({
         appId: '7298a4ca-5e74-47c5-a7ef-33d12c46749e',
+        serviceWorkerOverrideForTypical: true,
         serviceWorkerParam: { scope: '/Anuncios/' },
         serviceWorkerPath: 'Anuncios/sw.js',
         allowLocalhostAsSecureOrigin: true
