@@ -359,6 +359,14 @@ table.sg .ph small{display:block;font-weight:500;color:var(--ink-faint);font-siz
 
 /* mobile bottom nav */
 .mobile-nav{display:none}
+.notif-banner{display:flex;align-items:center;gap:10px;margin:14px 20px 0;padding:12px 14px;background:var(--pine-tint);
+  border:1px solid var(--pine);border-radius:var(--radius-sm);color:var(--pine)}
+.notif-banner svg{width:20px;height:20px;flex:none}
+.notif-banner .nb-text{flex:1;font-size:13.5px;font-weight:600;line-height:1.35}
+.notif-banner .nb-btn{flex:none;background:var(--pine);color:#fff;border:none;border-radius:8px;padding:8px 16px;
+  font-size:13.5px;font-weight:700;cursor:pointer}
+.notif-banner .nb-btn:hover{filter:brightness(1.08)}
+@media(max-width:640px){.notif-banner{margin:12px 14px 0}}
 @media (max-width:860px){
   .app.active{grid-template-columns:1fr}
   .sidebar{display:none}
@@ -551,6 +559,11 @@ table.sg .ph small{display:block;font-weight:500;color:var(--ink-faint);font-siz
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
         <span class="btn-label">Nuevo aviso</span>
       </button>
+    </div>
+    <div class="notif-banner" id="notifBanner" style="display:none">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+      <span class="nb-text">Activa las notificaciones para recibir los avisos en este dispositivo</span>
+      <button class="nb-btn" onclick="toggleNotif()">Activar</button>
     </div>
     <div class="content" id="content"></div>
   </main>
@@ -1808,11 +1821,14 @@ function isSubscribed(){
 }
 function refreshNotifBtn(){
   const btn = document.getElementById('notifBtn'), lbl = document.getElementById('notifLabel');
-  if(!btn || !lbl) return;
-  btn.style.display = '';                 // siempre visible en la barra
   const on = isSubscribed();
-  lbl.textContent = on ? 'Notificaciones activadas' : 'Activar notificaciones';
-  btn.classList.toggle('notif-on', on);
+  if(btn && lbl){
+    btn.style.display = '';                 // siempre visible en la barra (escritorio)
+    lbl.textContent = on ? 'Notificaciones activadas' : 'Activar notificaciones';
+    btn.classList.toggle('notif-on', on);
+  }
+  const banner = document.getElementById('notifBanner');
+  if(banner) banner.style.display = on ? 'none' : 'flex';
 }
 async function toggleNotif(){
   if(!__os){ toast('Las notificaciones aún se cargan… intenta de nuevo en unos segundos'); return; }
