@@ -1803,24 +1803,35 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
 
 /* ===================== NOTIFICACIONES PUSH (OneSignal) ===================== */
 let __os = null, __osReady = false, __pendingTagUser = null;
+function isSubscribed(){
+  try { return !!(__os && __os.User.PushSubscription.optedIn); } catch(e){ return false; }
+}
 function refreshNotifBtn(){
   const btn = document.getElementById('notifBtn'), lbl = document.getElementById('notifLabel');
-  if(!btn || !lbl || !__osReady) return;
-  btn.style.display = '';
-  let enabled = false;
-  try { enabled = !!__os.Notifications.permission; } catch(e){}
-  lbl.textContent = enabled ? 'Notificaciones activadas' : 'Activar notificaciones';
-  btn.classList.toggle('notif-on', enabled);
+  if(!btn || !lbl) return;
+  btn.style.display = '';                 // siempre visible en la barra
+  const on = isSubscribed();
+  lbl.textContent = on ? 'Notificaciones activadas' : 'Activar notificaciones';
+  btn.classList.toggle('notif-on', on);
 }
 async function toggleNotif(){
-  if(!__osReady){ toast('Las notificaciones aún se están cargando…'); return; }
+  if(!__os){ toast('Las notificaciones aún se cargan… intenta de nuevo en unos segundos'); return; }
   try {
-    if(__os.Notifications.permission){ toast('Ya tienes las notificaciones activadas'); }
-    else { await __os.Notifications.requestPermission(); refreshNotifBtn(); }
+    // 1) permiso del navegador (si aún no lo dio)
+    if(!__os.Notifications.permission){ await __os.Notifications.requestPermission(); }
+    // 2) asegurar la suscripción (re-suscribe si estaba desactivada / opted-out)
+    try { await __os.User.PushSubscription.optIn(); } catch(e){}
+    // 3) etiquetar por área/rol para poder segmentar
+    if(typeof me !== 'undefined' && me) applyTags(me);
+    await new Promise(r=>setTimeout(r, 900));
+    refreshNotifBtn();
+    toast(isSubscribed() ? 'Notificaciones activadas en este dispositivo ✓'
+                         : 'Permite las notificaciones en el navegador para activarlas');
   } catch(e){ toast('No se pudo activar en este dispositivo'); }
 }
 // El módulo/lo demás llama a esto al entrar: etiqueta la suscripción con el área/rol.
 window.notifOnLogin = function(u){
+  refreshNotifBtn();
   if(!u) return;
   if(!__osReady){ __pendingTagUser = u; return; }   // se aplicará al terminar de cargar
   applyTags(u);
@@ -1844,6 +1855,7 @@ if(location.protocol.startsWith('http')){
       });
       __os = OneSignal; __osReady = true;
       refreshNotifBtn();
+      try { OneSignal.User.PushSubscription.addEventListener('change', refreshNotifBtn); } catch(e){}
       try { OneSignal.Notifications.addEventListener('permissionChange', refreshNotifBtn); } catch(e){}
       if(__pendingTagUser){ applyTags(__pendingTagUser); __pendingTagUser = null; }
     } catch(e){ console.warn('OneSignal no se pudo iniciar:', e); }
