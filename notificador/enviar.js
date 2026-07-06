@@ -33,10 +33,10 @@ function targetFor(aud) {
     case 'coords':       return { filters: [{ field: 'tag', key: 'rol',  relation: '=', value: 'coordinacion' },
                                             { operator: 'OR' },
                                             { field: 'tag', key: 'rol',  relation: '=', value: 'direccion' }] };
-    case 'kinder':       return { filters: [{ field: 'tag', key: 'area', relation: '=', value: 'Kinder' }] };
-    case 'primaria':     return { filters: [{ field: 'tag', key: 'area', relation: '=', value: 'Primaria' }] };
-    case 'secundaria':   return { filters: [{ field: 'tag', key: 'area', relation: '=', value: 'Secundaria' }] };
-    case 'bachillerato': return { filters: [{ field: 'tag', key: 'area', relation: '=', value: 'Bachillerato' }] };
+    case 'kinder':       return { filters: [{ field: 'tag', key: 'area_Kinder', relation: '=', value: 'si' }] };
+    case 'primaria':     return { filters: [{ field: 'tag', key: 'area_Primaria', relation: '=', value: 'si' }] };
+    case 'secundaria':   return { filters: [{ field: 'tag', key: 'area_Secundaria', relation: '=', value: 'si' }] };
+    case 'bachillerato': return { filters: [{ field: 'tag', key: 'area_Bachillerato', relation: '=', value: 'si' }] };
     case 'admin':        return { filters: [{ field: 'tag', key: 'area', relation: '=', value: 'Administración' }] };
     case 'transporte':   return { filters: [{ field: 'tag', key: 'seccion', relation: '=', value: 'Transporte' }] };
     case 'mantenimiento':return { filters: [{ field: 'tag', key: 'seccion', relation: '=', value: 'Mantenimiento e Intendencia' }] };
