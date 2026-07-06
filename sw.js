@@ -4,7 +4,7 @@ importScripts("https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js");
 /* Comunica · Colegio Bilbao — Service Worker
    Permite instalar la app y usarla sin conexión (la pantalla y los datos demo).
    Sube este archivo junto a index.html (misma carpeta) en GitHub Pages. */
-const CACHE = 'comunica-v7';
+const CACHE = 'comunica-v9';
 const ASSETS = [
   './', './index.html', './manifest.webmanifest',
   './icon-192.png', './icon-512.png', './icon-maskable-512.png'

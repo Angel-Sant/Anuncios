@@ -121,6 +121,12 @@ input,textarea,select{font-family:inherit;font-size:15px;color:var(--ink)}
 .topbar{position:sticky;top:0;z-index:20;background:rgba(235,238,236,.85);backdrop-filter:blur(10px);
   border-bottom:1px solid var(--line);padding:16px 30px;display:flex;align-items:center;gap:16px}
 .topbar h2{font-family:'Fraunces',serif;font-weight:600;font-size:24px;letter-spacing:-.02em;flex:1;min-width:0}
+.bar-bell{position:relative;background:none;border:none;cursor:pointer;color:#5a6b64;padding:8px;border-radius:10px;display:flex;align-items:center;flex:none}
+.bar-bell:hover{background:rgba(0,0,0,.06)}
+.bar-bell svg{width:22px;height:22px}
+.bar-bell.on{color:#1D9E75}
+.bell-dot{position:absolute;top:4px;right:4px;width:9px;height:9px;border-radius:50%;background:#BA7517;border:2px solid #EBEEEC}
+.bar-bell.on .bell-dot{display:none}
 .topbar .eyebrow{display:block;font-family:'Inter';font-size:11.5px;font-weight:600;text-transform:uppercase;
   letter-spacing:.1em;color:var(--pine);margin-bottom:1px}
 .btn-primary{background:var(--pine);color:#fff;font-weight:600;font-size:14px;padding:10px 16px;border-radius:10px;
@@ -555,6 +561,10 @@ table.sg .ph small{display:block;font-weight:500;color:var(--ink-faint);font-siz
         <h2 id="tbTitle">Avisos</h2>
       </div>
       <img class="bar-logo" id="barLogo" alt="Colegio Bilbao">
+      <button class="bar-bell off" id="notifBell" onclick="toggleNotif()" title="Activar notificaciones" aria-label="Notificaciones">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        <span class="bell-dot" id="bellDot"></span>
+      </button>
       <button class="btn-primary" id="newBtn" onclick="openCompose()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
         <span class="btn-label">Nuevo aviso</span>
@@ -719,6 +729,8 @@ window.APP_CONFIG = CONFIG;
 
 // Roles que pueden publicar y marcar URGENTE
 const PUEDE_PUBLICAR = ['direccion','coordinacion'];
+// Permiso individual de publicar avisos: por rol (Dirección/Coordinación) O por permiso otorgado a la persona.
+function puedePublicar(u){ return !!u && (PUEDE_PUBLICAR.includes(u.role) || !!u.canPublish); }
 
 const PRIOS = {
   urgente:    {label:'Urgente',     color:'var(--urgente)',    tint:'var(--urgente-tint)'},
@@ -929,7 +941,7 @@ function enterApp(user){        // usado por demo y por Firebase (tras autentica
   document.getElementById('meBox').innerHTML =
     `<div class="avatar" style="background:${avColor(me.name)}">${initials(me.name)}</div>
      <div><div class="du-name">${me.name}</div><div class="du-role">${me.roleLabel}</div></div>`;
-  document.getElementById('newBtn').style.display = PUEDE_PUBLICAR.includes(me.role) ? '' : 'none';
+  document.getElementById('newBtn').style.display = puedePublicar(me) ? '' : 'none';
   if(window.notifOnLogin) window.notifOnLogin(me);   // etiqueta la suscripción con área/rol
   go('avisos');
 }
@@ -974,7 +986,7 @@ function go(v){
   document.getElementById('tbEyebrow').textContent = VIEW_META[v].eyebrow;
   document.getElementById('tbTitle').textContent = VIEW_META[v].title;
   document.getElementById('newBtn').style.display =
-    (v==='avisos' && PUEDE_PUBLICAR.includes(me.role)) ? '' : 'none';
+    (v==='avisos' && puedePublicar(me)) ? '' : 'none';
   render();
 }
 
@@ -1053,7 +1065,7 @@ function renderAviso(a){
   const pct = total? Math.round(readN/total*100):0;
   const iRead = a.read.includes(me.id);
   const aud = audById(a.aud).label;
-  const canSeeStats = PUEDE_PUBLICAR.includes(me.role) || a.author===me.name;
+  const canSeeStats = puedePublicar(me) || a.author===me.name;
 
   // pendientes (solo para quien publica / autor)
   const pendientes = recs.filter(r=>!a.read.includes(r.id)).map(r=>r.name.split(' ')[0]);
@@ -1578,13 +1590,18 @@ function renderDir(){
   const admin=esDireccion();
   const card=u=>`<div class="dir-card">
     <div class="avatar" style="background:${avColor(u.name)}">${initials(u.name)}</div>
-    <div style="flex:1;min-width:0"><div class="d-name">${u.name}</div><div class="d-role">${u.roleLabel}</div>${u.email?`<div class="d-area">${escapeHtml(u.email)}</div>`:''}</div>
+    <div style="flex:1;min-width:0"><div class="d-name">${u.name}</div><div class="d-role">${u.roleLabel}${(u.canPublish&&!PUEDE_PUBLICAR.includes(u.role))?' · <span style="color:var(--accent)">Puede publicar avisos</span>':''}</div>${u.email?`<div class="d-area">${escapeHtml(u.email)}</div>`:''}</div>
     ${admin?`<div class="dir-actions">
       <button onclick="openPersonModal('${u.id}')" title="Editar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg></button>
       <button onclick="delPerson('${u.id}')" title="Dar de baja"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
     </div>`:''}
   </div>`;
-  const addBtn = admin? `<div class="row-ctrl" style="margin-bottom:18px"><button class="btn-primary" onclick="openPersonModal()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg> Agregar persona</button></div>` : '';
+  const addBtn = admin? `<div class="row-ctrl" style="margin-bottom:18px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+    <button class="btn-primary" onclick="openPersonModal()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg> Agregar persona</button>
+    <button class="btn-ghost" onclick="pickCsv()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;vertical-align:-3px;margin-right:4px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>Importar CSV</button>
+    <button class="btn-ghost" onclick="downloadCsvTemplate()" style="font-size:13px">Descargar plantilla</button>
+    <input type="file" id="csvInput" accept=".csv" style="display:none" onchange="handleCsvFile(this)">
+  </div>` : '';
   const body = names.map(area=>{
     const list=areas[area];
     if(area==='Administración'){
@@ -1621,7 +1638,7 @@ function openPersonModal(id){
     <input type="hidden" id="pId" value="${u?u.id:''}">
     <div class="field"><label>Nombre</label><input id="pName" type="text" value="${u?escapeHtml(u.name):''}" placeholder="Nombre completo"></div>
     <div class="field"><label>Correo institucional</label><input id="pEmail" type="email" value="${u&&u.email?escapeHtml(u.email):''}" placeholder="nombre@colegio…"></div>
-    <div class="field"><label>Rol</label><select id="pRole">
+    <div class="field"><label>Rol</label><select id="pRole" onchange="onPersonRoleChange()">
       <option value="direccion"${roleVal==='direccion'?' selected':''}>Dirección</option>
       <option value="coordinacion"${roleVal==='coordinacion'?' selected':''}>Coordinación</option>
       <option value="docente"${roleVal==='docente'?' selected':''}>Docente</option>
@@ -1630,6 +1647,12 @@ function openPersonModal(id){
     <div class="field"><label>Área / sección</label><select id="pArea" onchange="onPersonAreaChange()">${sel(AREAS_PERSONA,areaVal)}</select></div>
     <div class="field" id="pSubWrap" style="display:${areaVal==='Administración'?'block':'none'}"><label>Subárea</label><select id="pSub">${sel(SUBAREAS_PERSONA,u&&u.subarea?u.subarea:'Administración')}</select></div>
     <div class="field"><label>Cargo / puesto <span class="opt">(opcional)</span></label><input id="pCargo" type="text" value="${u&&u.roleLabel?escapeHtml(u.roleLabel):''}" placeholder="Ej. Coord. Académica"></div>
+    <div class="field" id="pPublishWrap" style="display:${(roleVal==='direccion'||roleVal==='coordinacion')?'none':'block'}">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+        <input id="pCanPublish" type="checkbox" ${u&&u.canPublish?'checked':''} style="width:auto">
+        <span>Puede publicar avisos (sin cambiarle el rol)</span>
+      </label>
+    </div>
     <div class="modal-actions">
       ${u?`<button class="btn-ghost" onclick="delPerson('${u.id}')" style="margin-right:auto;color:var(--urgente)">Dar de baja</button>`:''}
       <button class="btn-ghost" onclick="closePersonModal()">Cancelar</button>
@@ -1641,6 +1664,10 @@ function onPersonAreaChange(){
   const area=document.getElementById('pArea').value;
   document.getElementById('pSubWrap').style.display = area==='Administración'?'block':'none';
 }
+function onPersonRoleChange(){
+  const role=document.getElementById('pRole').value;
+  document.getElementById('pPublishWrap').style.display = (role==='direccion'||role==='coordinacion')?'none':'block';
+}
 function closePersonModal(){document.getElementById('personBg').classList.remove('active');}
 function savePerson(){
   const id=document.getElementById('pId').value;
@@ -1650,16 +1677,17 @@ function savePerson(){
   const area=document.getElementById('pArea').value;
   const subarea= area==='Administración'? document.getElementById('pSub').value : undefined;
   const cargo=document.getElementById('pCargo').value.trim();
+  const canPublish=(role==='direccion'||role==='coordinacion')?false:document.getElementById('pCanPublish').checked;
   if(!name){toast('Escribe el nombre');return;}
   if(!email){toast('Escribe el correo');return;}
   const roleLabel=autoLabel(role,area,subarea,cargo);
   if(id){
     const u=USERS.find(x=>String(x.id)===String(id));
-    Object.assign(u,{name,email,role,area,subarea,roleLabel});
+    Object.assign(u,{name,email,role,area,subarea,roleLabel,canPublish});
     if(window.CLOUD) CLOUD.saveUsuario(u);
     toast('Persona actualizada');
   } else {
-    const u={id:'u'+Date.now(), name, email, role, area, subarea, roleLabel};
+    const u={id:'u'+Date.now(), name, email, role, area, subarea, roleLabel, canPublish};
     USERS.push(u);
     if(window.CLOUD) CLOUD.saveUsuario(u);
     toast('Persona agregada');
@@ -1673,6 +1701,99 @@ function delPerson(id){
   USERS=USERS.filter(x=>String(x.id)!==String(id));
   if(window.CLOUD) CLOUD.removeUsuario(id);
   closePersonModal(); toast('Persona dada de baja'); render();
+}
+
+/* ----- Importar personal desde CSV (solo Dirección) ----- */
+function pickCsv(){ if(!esDireccion()) return; document.getElementById('csvInput').click(); }
+function handleCsvFile(input){
+  const file = input.files && input.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload  = () => { try{ importCsvText(String(reader.result)); }catch(e){ toast('No se pudo procesar el CSV'); } input.value=''; };
+  reader.onerror = () => { toast('No se pudo leer el archivo'); input.value=''; };
+  reader.readAsText(file, 'UTF-8');
+}
+function parseCSV(text){
+  text = text.replace(/^\ufeff/,'').replace(/\r\n/g,'\n').replace(/\r/g,'\n');
+  const rows=[]; let field='', row=[], inQ=false;
+  for(let i=0;i<text.length;i++){
+    const ch=text[i];
+    if(inQ){
+      if(ch==='"'){ if(text[i+1]==='"'){field+='"';i++;} else inQ=false; }
+      else field+=ch;
+    } else {
+      if(ch==='"') inQ=true;
+      else if(ch===','){ row.push(field); field=''; }
+      else if(ch==='\n'){ row.push(field); rows.push(row); row=[]; field=''; }
+      else field+=ch;
+    }
+  }
+  if(field.length||row.length){ row.push(field); rows.push(row); }
+  return rows.filter(r=>r.some(c=>c.trim()!==''));
+}
+function normRole(v){
+  const s=(v||'').trim().toLowerCase();
+  if(['direccion','dirección','director','directora'].includes(s)) return 'direccion';
+  if(['coordinacion','coordinación','coordinador','coordinadora','coord'].includes(s)) return 'coordinacion';
+  if(['docente','maestro','maestra','profesor','profesora','teacher'].includes(s)) return 'docente';
+  return 'personal';
+}
+function normArea(v, role){
+  const s=(v||'').trim().toLowerCase();
+  const found=AREAS_PERSONA.find(a=>a.toLowerCase()===s);
+  if(found) return found;
+  if(role==='direccion') return 'Dirección';
+  if(role==='coordinacion') return 'Coordinación';
+  if(role==='personal') return 'Administración';
+  return 'Primaria';
+}
+function importCsvText(text){
+  const rows=parseCSV(text);
+  if(!rows.length){ toast('El archivo está vacío'); return; }
+  const header=rows[0].map(h=>h.trim().toLowerCase());
+  const hasHeader=header.some(h=>['nombre','name','correo','email','rol','role','area','área'].includes(h));
+  const col = hasHeader ? {
+    nombre: header.findIndex(h=>['nombre','name'].includes(h)),
+    correo: header.findIndex(h=>['correo','email','e-mail'].includes(h)),
+    rol:    header.findIndex(h=>['rol','role'].includes(h)),
+    area:   header.findIndex(h=>['area','área','seccion','sección'].includes(h)),
+    subarea:header.findIndex(h=>['subarea','subárea','sub'].includes(h)),
+    cargo:  header.findIndex(h=>['cargo','puesto'].includes(h)),
+  } : {nombre:0,correo:1,rol:2,area:3,subarea:4,cargo:5};
+  const data = hasHeader ? rows.slice(1) : rows;
+  let added=0, updated=0, skipped=0;
+  data.forEach(r=>{
+    const g=k=> (col[k]>=0 && r[col[k]]!=null) ? r[col[k]].trim() : '';
+    const name=g('nombre'), email=g('correo');
+    if(!name || !email){ skipped++; return; }
+    const role=normRole(g('rol'));
+    const area=normArea(g('area'), role);
+    const subarea = area==='Administración' ? (g('subarea')||'Administración') : undefined;
+    const roleLabel=autoLabel(role,area,subarea,g('cargo'));
+    const existing=USERS.find(u=>u.email && u.email.toLowerCase()===email.toLowerCase());
+    if(existing){
+      Object.assign(existing,{name,email,role,area,subarea,roleLabel});
+      if(window.CLOUD) CLOUD.saveUsuario(existing); updated++;
+    } else {
+      const u={id:'u'+Date.now()+Math.floor(Math.random()*1000), name, email, role, area, subarea, roleLabel};
+      USERS.push(u);
+      if(window.CLOUD) CLOUD.saveUsuario(u); added++;
+    }
+  });
+  render();
+  toast(`Importado: ${added} nuevos, ${updated} actualizados${skipped?`, ${skipped} omitidos`:''}`);
+}
+function downloadCsvTemplate(){
+  const csv='\ufeff'+
+    'nombre,correo,rol,area,subarea,cargo\n'+
+    'Laura Mendoza,laura.mendoza@bilbao.edu.mx,direccion,Dirección,,Directora General\n'+
+    'Roberto Díaz,roberto.diaz@bilbao.edu.mx,coordinacion,Coordinación,,Coord. Académica\n'+
+    'Ana Torres,ana.torres@bilbao.edu.mx,docente,Primaria,,\n'+
+    'Carmen Ruiz,carmen.ruiz@bilbao.edu.mx,personal,Administración,Mantenimiento e Intendencia,\n';
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download='plantilla-personal-comunica.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
 }
 
 /* ---------- FILTROS ---------- */
@@ -1829,6 +1950,11 @@ function refreshNotifBtn(){
   }
   const banner = document.getElementById('notifBanner');
   if(banner) banner.style.display = on ? 'none' : 'flex';
+  const bell = document.getElementById('notifBell');
+  if(bell){
+    bell.classList.toggle('on', on);
+    bell.title = on ? 'Notificaciones activadas' : 'Activar notificaciones';
+  }
 }
 async function toggleNotif(){
   if(!__os){ toast('Las notificaciones aún se cargan… intenta de nuevo en unos segundos'); return; }
@@ -1958,7 +2084,7 @@ if (ACTIVE) {
     saveTarea: t => setDoc(doc(db, 'tareas_personales', String(t.id)), { owner: t.owner, title: t.title, due: t.due || '', time: t.time || '', reminders: t.reminders || [], sentReminders: t.sentReminders || [], notes: t.notes || '', done: !!t.done, ts: t.ts }),
     removeTarea: id => deleteDoc(doc(db, 'tareas_personales', String(id))),
     saveOrden: o => setDoc(doc(db, 'mantenimiento', String(o.id)), { title: o.title, desc: o.desc || '', loc: o.loc || '', prio: o.prio, reporter: o.reporter, reporterId: o.reporterId, ts: o.ts, status: o.status, ...(o.doneTs ? { doneTs: o.doneTs } : {}) }),
-    saveUsuario: u => setDoc(doc(db, 'usuarios', String(u.id)), { name: u.name, email: u.email || '', role: u.role, roleLabel: u.roleLabel || '', area: u.area, ...(u.subarea ? { subarea: u.subarea } : {}) }),
+    saveUsuario: u => setDoc(doc(db, 'usuarios', String(u.id)), { name: u.name, email: u.email || '', role: u.role, roleLabel: u.roleLabel || '', area: u.area, ...(u.subarea ? { subarea: u.subarea } : {}), ...(u.canPublish ? { canPublish: true } : {}) }),
     removeUsuario: id => deleteDoc(doc(db, 'usuarios', String(id))),
     signOut: () => signOut(auth)
   };
