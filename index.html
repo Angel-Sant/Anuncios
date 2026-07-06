@@ -755,7 +755,7 @@ let USERS = [
   {id:'u16',name:'Mariana Gil',    role:'docente',      roleLabel:'Docente · Primaria',          area:'Primaria'},
   // Secundaria
   {id:'u6', name:'Miguel Ríos',    role:'docente',      roleLabel:'Docente · Secundaria',        area:'Secundaria', demo:true},
-  {id:'u17',name:'Andrés Pérez',   role:'docente',      roleLabel:'Docente · Secundaria',        area:'Secundaria'},
+  {id:'u17',name:'Andrés Pérez',   role:'docente',      roleLabel:'Docente · Secundaria + Bachillerato', area:'Secundaria', areas:['Secundaria','Bachillerato']},
   {id:'u18',name:'Paola Vega',     role:'docente',      roleLabel:'Docente · Secundaria',        area:'Secundaria'},
   {id:'u19',name:'Iván Cruz',      role:'docente',      roleLabel:'Docente · Secundaria',        area:'Secundaria'},
   // Bachillerato
@@ -772,17 +772,20 @@ let USERS = [
 ];
 const SECCIONES = ['Kinder','Primaria','Secundaria','Bachillerato'];
 function docentes(){return USERS.filter(u=>u.role==='docente');}
-function docentesDe(sec){return USERS.filter(u=>u.role==='docente'&&u.area===sec);}
+// Un docente puede tener varias áreas académicas (ej. da clases en Primaria y en Bachillerato).
+// areasDe() devuelve siempre un arreglo: usa u.areas si existe, si no cae a [u.area] (compatibilidad con datos viejos).
+function areasDe(u){ if(Array.isArray(u.areas)&&u.areas.length) return u.areas; return u.area?[u.area]:[]; }
+function docentesDe(sec){return USERS.filter(u=>u.role==='docente'&&areasDe(u).includes(sec));}
 function userById(id){return USERS.find(u=>u.id===id);}
 
 const AUDIENCES = [
   {id:'todos',        label:'Todo el personal',           group:null,             match:()=>true},
   {id:'docentes',     label:'Todos los docentes',         group:null,             match:u=>u.role==='docente'},
   {id:'coords',       label:'Coordinaciones',             group:null,             match:u=>u.role==='coordinacion'||u.role==='direccion'},
-  {id:'kinder',       label:'Kinder',                     group:'Áreas académicas', match:u=>u.area==='Kinder'},
-  {id:'primaria',     label:'Primaria',                   group:'Áreas académicas', match:u=>u.area==='Primaria'},
-  {id:'secundaria',   label:'Secundaria',                 group:'Áreas académicas', match:u=>u.area==='Secundaria'},
-  {id:'bachillerato', label:'Bachillerato',               group:'Áreas académicas', match:u=>u.area==='Bachillerato'},
+  {id:'kinder',       label:'Kinder',                     group:'Áreas académicas', match:u=>areasDe(u).includes('Kinder')},
+  {id:'primaria',     label:'Primaria',                   group:'Áreas académicas', match:u=>areasDe(u).includes('Primaria')},
+  {id:'secundaria',   label:'Secundaria',                 group:'Áreas académicas', match:u=>areasDe(u).includes('Secundaria')},
+  {id:'bachillerato', label:'Bachillerato',               group:'Áreas académicas', match:u=>areasDe(u).includes('Bachillerato')},
   {id:'admin',        label:'Toda el área',               group:'Administración', match:u=>u.area==='Administración'},
   {id:'transporte',   label:'Transporte',                 group:'Administración', match:u=>u.subarea==='Transporte'},
   {id:'mantenimiento',label:'Mantenimiento e Intendencia',group:'Administración', match:u=>u.subarea==='Mantenimiento e Intendencia'},
@@ -856,10 +859,12 @@ const PERIODOS = [
 // DEMO: se generan horarios de ejemplo escalonados para que las suplencias tengan a quién asignar.
 // PRODUCCIÓN: estos horarios se capturan/suben y se guardan en Firestore.
 const GRUPOS_SEC = {Kinder:['K1','K2','K3'],Primaria:['1°','2°','3°','4°'],Secundaria:['1°A','2°B','3°A','1°C'],Bachillerato:['4°','5°','6°']};
+// Grupos disponibles para un docente: combina los grupos de TODAS sus áreas (si da clases en varias secciones).
+function gruposDe(u){ const list=[].concat(...areasDe(u).map(a=>GRUPOS_SEC[a]||[])); return list.length?list:['G']; }
 let SCHEDULES = {};
 (function seedSchedules(){
   docentes().forEach((u,di)=>{
-    const grupos = GRUPOS_SEC[u.area]||['G'];
+    const grupos = gruposDe(u);
     const mat=[];
     for(let d=0;d<5;d++){const fila=[];
       for(let p=0;p<7;p++){
@@ -1251,7 +1256,7 @@ function renderEditorHorarios(){
 function selTeacher(id){horTeacher=id;render();}
 function toggleCell(uid,d,p){
   const m=schedOf(uid);
-  m[d][p] = m[d][p] ? null : {group:(GRUPOS_SEC[userById(uid).area]||['G'])[(p+d)%(GRUPOS_SEC[userById(uid).area]||['G']).length]};
+  m[d][p] = m[d][p] ? null : {group:gruposDe(userById(uid))[(p+d)%gruposDe(userById(uid)).length]};
   if(window.CLOUD) CLOUD.saveSchedule(uid, SCHEDULES[uid]);
   render();
 }
@@ -1288,10 +1293,16 @@ function ocupado(cid,d,p){
   return absences.some(ab=>ab.day===d && ab.asign.some(a=>a.p===p && a.subId===cid));
 }
 function ausenteEseDia(cid,d){return absences.some(ab=>ab.teacherId===cid && ab.day===d);}
+// Candidatos a cubrir a T: unión de los docentes de TODAS las áreas de T (si da clases en varias secciones), sin duplicados.
+function poolSuplencia(T){
+  const ids=new Set(); const pool=[];
+  areasDe(T).forEach(sec=>docentesDe(sec).forEach(u=>{ if(u.id!==T.id && !ids.has(u.id)){ids.add(u.id);pool.push(u);} }));
+  return pool;
+}
 
 function asignarSuplencias(teacherId,d,periodos){
-  const T=userById(teacherId); const sec=T.area;
-  const pool=docentesDe(sec).filter(u=>u.id!==teacherId);
+  const T=userById(teacherId);
+  const pool=poolSuplencia(T);
   const asign=[];
   for(let p=0;p<7;p++){
     const cell=schedOf(teacherId)[d][p];
@@ -1384,7 +1395,7 @@ function renderAbsenceCard(ab){
   const rows=ab.asign.map((a,ri)=>{
     const per=PERIODOS[a.p];
     // candidatos válidos para reasignar manualmente
-    const pool=docentesDe(T.area).filter(u=>u.id!==T.id);
+    const pool=poolSuplencia(T);
     const opts=pool.filter(c=> c.id===a.subId || (!ocupado(c.id,ab.day,a.p)&&!ausenteEseDia(c.id,ab.day)) )
       .sort((x,y)=>(coverCount[x.id]-coverCount[y.id])||x.name.localeCompare(y.name));
     const sel = esManager()
@@ -1404,7 +1415,7 @@ function renderAbsenceCard(ab){
     <div class="absence-head">
       <span class="ah-name">${T.name}</span>
       <span class="ah-tag ${ab.motivo==='reunion'?'meet':''}">${ab.motivo==='reunion'?'Reunión':'No asistió'}</span>
-      <span class="ah-sec">${T.area} · ${DIAS[ab.day]}</span>
+      <span class="ah-sec">${areasDe(T).join(' + ')} · ${DIAS[ab.day]}</span>
       ${esManager()?`<button class="ah-rm" onclick="quitarFalta(${idx})">Quitar</button>`:''}
     </div>${rows}
   </div>`;
@@ -1585,7 +1596,7 @@ const esDireccion = ()=> me && me.role==='direccion';
 function renderDir(){
   const order=['Dirección','Coordinación','Kinder','Primaria','Secundaria','Bachillerato','Administración'];
   const areas={};
-  USERS.forEach(u=>{(areas[u.area]=areas[u.area]||[]).push(u);});
+  USERS.forEach(u=>{areasDe(u).forEach(a=>{(areas[a]=areas[a]||[]).push(u);});});
   const names=Object.keys(areas).sort((a,b)=>order.indexOf(a)-order.indexOf(b));
   const admin=esDireccion();
   const card=u=>`<div class="dir-card">
@@ -1632,6 +1643,7 @@ function openPersonModal(id){
   const u = id? USERS.find(x=>String(x.id)===String(id)) : null;
   const sel=(opts,val)=>opts.map(o=>`<option value="${o}"${o===val?' selected':''}>${o}</option>`).join('');
   const roleVal=u?u.role:'docente', areaVal=u?u.area:'Primaria';
+  const areasActuales = u? areasDe(u) : (areaVal?[areaVal]:[]);
   document.getElementById('personModal').innerHTML=`
     <h3>${u?'Editar persona':'Agregar persona'}</h3>
     <p class="m-sub">Los datos y el rol se guardan en el sistema. La contraseña de acceso se crea aparte en Firebase.</p>
@@ -1644,7 +1656,15 @@ function openPersonModal(id){
       <option value="docente"${roleVal==='docente'?' selected':''}>Docente</option>
       <option value="personal"${roleVal==='personal'?' selected':''}>Personal (administración/servicios)</option>
     </select></div>
-    <div class="field"><label>Área / sección</label><select id="pArea" onchange="onPersonAreaChange()">${sel(AREAS_PERSONA,areaVal)}</select></div>
+    <div class="field"><label id="pAreaLabel">${roleVal==='docente'?'Área principal':'Área / sección'}</label><select id="pArea" onchange="onPersonAreaChange()">${sel(AREAS_PERSONA,areaVal)}</select></div>
+    <div class="field" id="pAreasExtraWrap" style="display:${roleVal==='docente'?'block':'none'}">
+      <label>También da clases en <span class="opt">(opcional, marca las que apliquen)</span></label>
+      <div style="display:flex;flex-wrap:wrap;gap:10px">
+        ${SECCIONES.map(s=>`<label style="display:flex;align-items:center;gap:6px;font-weight:400;cursor:pointer">
+          <input type="checkbox" class="pAreaExtra" value="${s}" ${areasActuales.includes(s)?'checked':''} style="width:auto">${s}
+        </label>`).join('')}
+      </div>
+    </div>
     <div class="field" id="pSubWrap" style="display:${areaVal==='Administración'?'block':'none'}"><label>Subárea</label><select id="pSub">${sel(SUBAREAS_PERSONA,u&&u.subarea?u.subarea:'Administración')}</select></div>
     <div class="field"><label>Cargo / puesto <span class="opt">(opcional)</span></label><input id="pCargo" type="text" value="${u&&u.roleLabel?escapeHtml(u.roleLabel):''}" placeholder="Ej. Coord. Académica"></div>
     <div class="field" id="pPublishWrap" style="display:${(roleVal==='direccion'||roleVal==='coordinacion')?'none':'block'}">
@@ -1667,6 +1687,8 @@ function onPersonAreaChange(){
 function onPersonRoleChange(){
   const role=document.getElementById('pRole').value;
   document.getElementById('pPublishWrap').style.display = (role==='direccion'||role==='coordinacion')?'none':'block';
+  document.getElementById('pAreasExtraWrap').style.display = role==='docente'?'block':'none';
+  document.getElementById('pAreaLabel').textContent = role==='docente'?'Área principal':'Área / sección';
 }
 function closePersonModal(){document.getElementById('personBg').classList.remove('active');}
 function savePerson(){
@@ -1678,16 +1700,19 @@ function savePerson(){
   const subarea= area==='Administración'? document.getElementById('pSub').value : undefined;
   const cargo=document.getElementById('pCargo').value.trim();
   const canPublish=(role==='direccion'||role==='coordinacion')?false:document.getElementById('pCanPublish').checked;
+  const areasExtra = role==='docente' ? [...document.querySelectorAll('.pAreaExtra:checked')].map(cb=>cb.value) : [];
+  const areas = role==='docente' ? Array.from(new Set([area, ...areasExtra])) : undefined;
   if(!name){toast('Escribe el nombre');return;}
   if(!email){toast('Escribe el correo');return;}
-  const roleLabel=autoLabel(role,area,subarea,cargo);
+  const areaLabel = (role==='docente' && areas.length>1) ? areas.join(' + ') : area;
+  const roleLabel=autoLabel(role,areaLabel,subarea,cargo);
   if(id){
     const u=USERS.find(x=>String(x.id)===String(id));
-    Object.assign(u,{name,email,role,area,subarea,roleLabel,canPublish});
+    Object.assign(u,{name,email,role,area,areas,subarea,roleLabel,canPublish});
     if(window.CLOUD) CLOUD.saveUsuario(u);
     toast('Persona actualizada');
   } else {
-    const u={id:'u'+Date.now(), name, email, role, area, subarea, roleLabel, canPublish};
+    const u={id:'u'+Date.now(), name, email, role, area, areas, subarea, roleLabel, canPublish};
     USERS.push(u);
     if(window.CLOUD) CLOUD.saveUsuario(u);
     toast('Persona agregada');
@@ -1766,15 +1791,18 @@ function importCsvText(text){
     const name=g('nombre'), email=g('correo');
     if(!name || !email){ skipped++; return; }
     const role=normRole(g('rol'));
-    const area=normArea(g('area'), role);
+    const areaTokens=g('area').split(/[+,]/).map(t=>t.trim()).filter(Boolean);
+    const area=normArea(areaTokens[0]||'', role);
+    const areas = role==='docente' && areaTokens.length ? Array.from(new Set(areaTokens.map(t=>normArea(t,role)))) : undefined;
     const subarea = area==='Administración' ? (g('subarea')||'Administración') : undefined;
-    const roleLabel=autoLabel(role,area,subarea,g('cargo'));
+    const areaLabel = (role==='docente' && areas && areas.length>1) ? areas.join(' + ') : area;
+    const roleLabel=autoLabel(role,areaLabel,subarea,g('cargo'));
     const existing=USERS.find(u=>u.email && u.email.toLowerCase()===email.toLowerCase());
     if(existing){
-      Object.assign(existing,{name,email,role,area,subarea,roleLabel});
+      Object.assign(existing,{name,email,role,area,areas,subarea,roleLabel});
       if(window.CLOUD) CLOUD.saveUsuario(existing); updated++;
     } else {
-      const u={id:'u'+Date.now()+Math.floor(Math.random()*1000), name, email, role, area, subarea, roleLabel};
+      const u={id:'u'+Date.now()+Math.floor(Math.random()*1000), name, email, role, area, areas, subarea, roleLabel};
       USERS.push(u);
       if(window.CLOUD) CLOUD.saveUsuario(u); added++;
     }
@@ -1788,6 +1816,7 @@ function downloadCsvTemplate(){
     'Laura Mendoza,laura.mendoza@bilbao.edu.mx,direccion,Dirección,,Directora General\n'+
     'Roberto Díaz,roberto.diaz@bilbao.edu.mx,coordinacion,Coordinación,,Coord. Académica\n'+
     'Ana Torres,ana.torres@bilbao.edu.mx,docente,Primaria,,\n'+
+    'Sofía Cano,sofia.cano@bilbao.edu.mx,docente,Primaria+Bachillerato,,\n'+
     'Carmen Ruiz,carmen.ruiz@bilbao.edu.mx,personal,Administración,Mantenimiento e Intendencia,\n';
   const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
   const a=document.createElement('a');
@@ -1980,7 +2009,10 @@ window.notifOnLogin = function(u){
 };
 async function applyTags(u){
   try {
-    await __os.User.addTags({ area: u.area || '', rol: u.role || '', seccion: u.subarea || u.area || '' });
+    const secs = (typeof areasDe==='function') ? areasDe(u) : (u.area?[u.area]:[]);
+    const areaTags = {};
+    SECCIONES.forEach(s=>{ areaTags['area_'+s] = secs.includes(s) ? 'si' : 'no'; });
+    await __os.User.addTags({ area: u.area || '', rol: u.role || '', seccion: u.subarea || u.area || '', ...areaTags });
     if(u.id != null) await __os.login(String(u.id));
   } catch(e){ /* silencioso */ }
 }
@@ -2084,7 +2116,7 @@ if (ACTIVE) {
     saveTarea: t => setDoc(doc(db, 'tareas_personales', String(t.id)), { owner: t.owner, title: t.title, due: t.due || '', time: t.time || '', reminders: t.reminders || [], sentReminders: t.sentReminders || [], notes: t.notes || '', done: !!t.done, ts: t.ts }),
     removeTarea: id => deleteDoc(doc(db, 'tareas_personales', String(id))),
     saveOrden: o => setDoc(doc(db, 'mantenimiento', String(o.id)), { title: o.title, desc: o.desc || '', loc: o.loc || '', prio: o.prio, reporter: o.reporter, reporterId: o.reporterId, ts: o.ts, status: o.status, ...(o.doneTs ? { doneTs: o.doneTs } : {}) }),
-    saveUsuario: u => setDoc(doc(db, 'usuarios', String(u.id)), { name: u.name, email: u.email || '', role: u.role, roleLabel: u.roleLabel || '', area: u.area, ...(u.subarea ? { subarea: u.subarea } : {}), ...(u.canPublish ? { canPublish: true } : {}) }),
+    saveUsuario: u => setDoc(doc(db, 'usuarios', String(u.id)), { name: u.name, email: u.email || '', role: u.role, roleLabel: u.roleLabel || '', area: u.area, ...(u.subarea ? { subarea: u.subarea } : {}), ...(u.canPublish ? { canPublish: true } : {}), ...(u.role==='docente' && Array.isArray(u.areas) && u.areas.length ? { areas: u.areas } : {}) }),
     removeUsuario: id => deleteDoc(doc(db, 'usuarios', String(id))),
     signOut: () => signOut(auth)
   };
