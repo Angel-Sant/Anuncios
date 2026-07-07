@@ -1781,6 +1781,7 @@ function importCsvText(text){
     correo: header.findIndex(h=>['correo','email','e-mail'].includes(h)),
     rol:    header.findIndex(h=>['rol','role'].includes(h)),
     area:   header.findIndex(h=>['area','área','seccion','sección'].includes(h)),
+    area2:  header.findIndex(h=>['area2','área2','area 2','área 2','segunda area','segunda área'].includes(h)),
     subarea:header.findIndex(h=>['subarea','subárea','sub'].includes(h)),
     cargo:  header.findIndex(h=>['cargo','puesto'].includes(h)),
   } : {nombre:0,correo:1,rol:2,area:3,subarea:4,cargo:5};
@@ -1791,7 +1792,8 @@ function importCsvText(text){
     const name=g('nombre'), email=g('correo');
     if(!name || !email){ skipped++; return; }
     const role=normRole(g('rol'));
-    const areaTokens=g('area').split(/[+,]/).map(t=>t.trim()).filter(Boolean);
+    // Admite el área principal y, si existe, la columna "área 2" (o varias separadas por + dentro de la misma celda).
+    const areaTokens=[g('area'),g('area2')].filter(Boolean).join('+').split(/[+,]/).map(t=>t.trim()).filter(Boolean);
     const area=normArea(areaTokens[0]||'', role);
     const areas = role==='docente' && areaTokens.length ? Array.from(new Set(areaTokens.map(t=>normArea(t,role)))) : undefined;
     const subarea = area==='Administración' ? (g('subarea')||'Administración') : undefined;
@@ -1812,12 +1814,12 @@ function importCsvText(text){
 }
 function downloadCsvTemplate(){
   const csv='\ufeff'+
-    'nombre,correo,rol,area,subarea,cargo\n'+
-    'Laura Mendoza,laura.mendoza@bilbao.edu.mx,direccion,Dirección,,Directora General\n'+
-    'Roberto Díaz,roberto.diaz@bilbao.edu.mx,coordinacion,Coordinación,,Coord. Académica\n'+
-    'Ana Torres,ana.torres@bilbao.edu.mx,docente,Primaria,,\n'+
-    'Sofía Cano,sofia.cano@bilbao.edu.mx,docente,Primaria+Bachillerato,,\n'+
-    'Carmen Ruiz,carmen.ruiz@bilbao.edu.mx,personal,Administración,Mantenimiento e Intendencia,\n';
+    'nombre,correo,rol,area,area2,subarea,cargo\n'+
+    'Laura Mendoza,laura.mendoza@bilbao.edu.mx,direccion,Dirección,,,Directora General\n'+
+    'Roberto Díaz,roberto.diaz@bilbao.edu.mx,coordinacion,Coordinación,,,Coord. Académica\n'+
+    'Ana Torres,ana.torres@bilbao.edu.mx,docente,Primaria,,,\n'+
+    'Sofía Cano,sofia.cano@bilbao.edu.mx,docente,Secundaria,Bachillerato,,\n'+
+    'Carmen Ruiz,carmen.ruiz@bilbao.edu.mx,personal,Administración,,Mantenimiento e Intendencia,\n';
   const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob); a.download='plantilla-personal-comunica.csv';
