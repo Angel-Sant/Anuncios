@@ -1854,9 +1854,9 @@ function toggleReminder(r){
 function onFilePick(input){
   const f=input.files&&input.files[0];
   if(!f) return;
-  // DEMO: guardamos el archivo en memoria con un object URL para poder abrirlo en la sesión.
-  // PRODUCCIÓN: subir a Drive/Storage y guardar el enlace.
-  composeFile={name:f.name, url:URL.createObjectURL(f)};
+  // Vista previa inmediata con un object URL local; si hay Firebase Storage activo, al publicar
+  // se sube el archivo real (composeFile.raw) y este URL se reemplaza por el enlace permanente.
+  composeFile={name:f.name, url:URL.createObjectURL(f), raw:f};
   renderFileChip();
 }
 function removeFile(){
@@ -1895,7 +1895,7 @@ function openCompose(){
 }
 function closeCompose(){document.getElementById('modalBg').classList.remove('active');}
 
-function publish(){
+async function publish(){
   const title=document.getElementById('fTitle').value.trim();
   const body=document.getElementById('fBody').value.trim();
   const aud=document.getElementById('fAud').value;
@@ -1904,6 +1904,21 @@ function publish(){
 
   const aviso={id:nextId++,title,body,prio:composePrio,aud,author:me.name,ts:Date.now(),read:[me.id]};
   if(composeFile) aviso.file=composeFile;
+
+  // Si hay un archivo real y Storage está disponible, lo subimos y reemplazamos el enlace temporal
+  // por uno permanente ANTES de guardar el aviso (así el link ya sirve para todos, no solo en esta sesión).
+  if(aviso.file && aviso.file.raw && window.CLOUD && CLOUD.subirArchivo){
+    const btn=document.querySelector('.btn-primary[onclick="publish()"]');
+    if(btn){ btn.disabled=true; btn.textContent='Subiendo documento…'; }
+    try{
+      const url = await CLOUD.subirArchivo(aviso.file.raw, aviso.id);
+      aviso.file = {name: aviso.file.name, url};
+    }catch(e){
+      toast('No se pudo subir el documento; el aviso se publica sin adjunto');
+      aviso.file = null;
+    }
+    if(btn){ btn.disabled=false; btn.textContent='Publicar aviso'; }
+  }
 
   if(composeScheduled){
     const dStr=document.getElementById('fDate').value;
@@ -2057,11 +2072,13 @@ if (ACTIVE) {
 
   const V = 'https://www.gstatic.com/firebasejs/10.12.2';
   let initializeApp, getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged,
-      getFirestore, collection, getDocs, doc, setDoc, updateDoc, deleteDoc, arrayUnion;
+      getFirestore, collection, getDocs, doc, setDoc, updateDoc, deleteDoc, arrayUnion,
+      getStorage, storageRef, uploadBytes, getDownloadURL;
   try {
     ({ initializeApp } = await import(`${V}/firebase-app.js`));
     ({ getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } = await import(`${V}/firebase-auth.js`));
     ({ getFirestore, collection, getDocs, doc, setDoc, updateDoc, deleteDoc, arrayUnion } = await import(`${V}/firebase-firestore.js`));
+    ({ getStorage, ref: storageRef, uploadBytes, getDownloadURL } = await import(`${V}/firebase-storage.js`));
   } catch (err) {
     console.error('No se pudo cargar Firebase:', err);
     showErr('No se pudo cargar Firebase. Abre la app desde su dirección web (https://…), no como archivo local, y revisa tu conexión.');
@@ -2071,6 +2088,7 @@ if (ACTIVE) {
   const app = initializeApp(CFG);
   const auth = getAuth(app);
   const db = getFirestore(app);
+  const storage = getStorage(app);
 
   document.getElementById('fbBtn').addEventListener('click', async () => {
     showErr('');
@@ -2107,7 +2125,7 @@ if (ACTIVE) {
     title: a.title, body: a.body, prio: a.prio, aud: a.aud, author: a.author, ts: a.ts, read: a.read || [],
     notified: false, sentReminders: [],
     ...(a.event ? { event: { time: a.event.time || '', cat: a.event.cat, color: a.event.color, reminders: a.event.reminders || [], date: a.event.date.toISOString() } } : {}),
-    ...(a.file ? { file: { name: a.file.name } } : {})
+    ...(a.file ? { file: { name: a.file.name, ...(a.file.url ? { url: a.file.url } : {}) } } : {})
   });
   window.CLOUD = {
     saveAviso: a => { setDoc(doc(db, 'avisos', String(a.id)), serAviso(a)); if (a.event) setDoc(doc(db, 'eventos', 'ev_' + a.id), { title: a.title, cat: a.event.cat, color: a.event.color, date: a.event.date.toISOString() }); },
@@ -2120,6 +2138,13 @@ if (ACTIVE) {
     saveOrden: o => setDoc(doc(db, 'mantenimiento', String(o.id)), { title: o.title, desc: o.desc || '', loc: o.loc || '', prio: o.prio, reporter: o.reporter, reporterId: o.reporterId, ts: o.ts, status: o.status, ...(o.doneTs ? { doneTs: o.doneTs } : {}) }),
     saveUsuario: u => setDoc(doc(db, 'usuarios', String(u.id)), { name: u.name, email: u.email || '', role: u.role, roleLabel: u.roleLabel || '', area: u.area, ...(u.subarea ? { subarea: u.subarea } : {}), ...(u.canPublish ? { canPublish: true } : {}), ...(u.role==='docente' && Array.isArray(u.areas) && u.areas.length ? { areas: u.areas } : {}) }),
     removeUsuario: id => deleteDoc(doc(db, 'usuarios', String(id))),
+    // Sube el documento adjunto de un aviso a Storage y devuelve su enlace de descarga permanente.
+    subirArchivo: async (file, avisoId) => {
+      const path = `avisos/${avisoId}/${Date.now()}_${file.name}`;
+      const r = storageRef(storage, path);
+      await uploadBytes(r, file);
+      return await getDownloadURL(r);
+    },
     signOut: () => signOut(auth)
   };
 
