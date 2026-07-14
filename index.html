@@ -678,6 +678,10 @@ table.sg .ph small{display:block;font-weight:500;color:var(--ink-faint);font-siz
   <div class="modal" id="eventModal"></div>
 </div>
 
+<div class="modal-bg" id="docBg">
+  <div class="modal" id="docModal"></div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -721,6 +725,9 @@ const CONFIG = {
     appId: '1:557394863474:web:cc2b20e80c01ce5f4029eb'
   },
   DOMINIO: 'tudominio.edu.mx', // para cuando se active el login con dominio del colegio
+  // ▼ Opcional: link a una Hoja o Doc de Google con la lista completa de documentos del colegio.
+  // Déjalo en 'PEGA-AQUI' si todavía no la tienes — el botón simplemente no aparece hasta que la pegues.
+  documentosUrl: 'PEGA-AQUI',
 };
 // La app entra en modo Firebase solo si ya pegaste una apiKey real.
 const USE_FIREBASE = CONFIG.firebaseConfig && CONFIG.firebaseConfig.apiKey && CONFIG.firebaseConfig.apiKey !== 'PEGA-AQUI';
@@ -841,13 +848,17 @@ let EVENTOS = (()=>{ const n=new Date(); const y=n.getFullYear(), m=n.getMonth()
   ];
 })();
 
-const DOCS = [
-  {name:'Reglamento interno del personal', cat:'Normatividad'},
-  {name:'Formato de planeación didáctica', cat:'Académico'},
-  {name:'Calendario escolar oficial 2025–2026', cat:'Calendarios'},
-  {name:'Solicitud de permiso / incidencia', cat:'Recursos Humanos'},
-  {name:'Protocolo de seguridad escolar', cat:'Normatividad'},
-];
+// Repositorio de Documentos: hasta 20 espacios, cada uno con nombre + enlace (a un archivo en Drive, etc.).
+// Los primeros 5 vienen precargados como ejemplo; el resto empieza vacío para que Dirección los llene.
+const DOC_SLOTS = 20;
+let DOCUMENTOS = Array.from({length: DOC_SLOTS}, (_, i) => null);
+[
+  {name:'Reglamento interno del personal', url:''},
+  {name:'Formato de planeación didáctica', url:''},
+  {name:'Calendario escolar oficial 2025–2026', url:''},
+  {name:'Solicitud de permiso / incidencia', url:''},
+  {name:'Protocolo de seguridad escolar', url:''},
+].forEach((d,i)=>{ DOCUMENTOS[i]=d; });
 
 /* ---------- HORARIOS ---------- */
 const DIAS = ['Lunes','Martes','Miércoles','Jueves','Viernes'];
@@ -960,6 +971,7 @@ window.hydrate = function(data){
   if(data.absences) absences = data.absences;
   if(data.ptareas)  PTAREAS = data.ptareas;
   if(data.ordenes)  ORDENES = data.ordenes;
+  if(data.documentos) DOCUMENTOS = data.documentos;
   // recalcula la carga de suplencias a partir de las inasistencias cargadas
   Object.keys(coverCount).forEach(k=>delete coverCount[k]);
   docentes().forEach(u=>coverCount[u.id]=0);
@@ -1582,13 +1594,67 @@ function setOrden(id,status){
 }
 
 /* ---------- DOCUMENTOS ---------- */
+function puedeEditarDocs(){ return me && (esDireccion() || puedePublicar(me)); }
 function renderDocs(){
-  return DOCS.map(d=>`<div class="doc">
-    <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
-    <div><div class="d-name">${d.name}</div><div class="d-cat">${d.cat}</div></div>
-    <a href="#" onclick="event.preventDefault();toast('En producción se abre el archivo en Drive')">Abrir
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M7 17L17 7M7 7h10v10"/></svg></a>
-  </div>`).join('');
+  const sheetUrl = window.APP_CONFIG && window.APP_CONFIG.documentosUrl && window.APP_CONFIG.documentosUrl!=='PEGA-AQUI' ? window.APP_CONFIG.documentosUrl : null;
+  const topLink = sheetUrl ? `<a href="${escapeHtml(sheetUrl)}" target="_blank" rel="noopener" class="btn-primary"
+      style="display:inline-flex;align-items:center;gap:8px;text-decoration:none;margin-bottom:16px">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14L21 3"/></svg>
+      Ver hoja completa de documentos</a>` : '';
+  const puede = puedeEditarDocs();
+  const cards = DOCUMENTOS.map((d,i)=>{
+    if(d && d.name){
+      return `<div class="doc">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
+        <div style="flex:1;min-width:0"><div class="d-name">${escapeHtml(d.name)}</div></div>
+        ${d.url?`<a href="${escapeHtml(d.url)}" target="_blank" rel="noopener">Abrir
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M7 17L17 7M7 7h10v10"/></svg></a>`
+          :`<span class="d-cat" style="margin-left:auto">Sin enlace</span>`}
+        ${puede?`<button onclick="openDocSlotModal(${i})" title="Editar" style="margin-left:10px;background:none;border:none;
+          cursor:pointer;color:var(--ink-faint);font-size:16px;line-height:1">✎</button>`:''}
+      </div>`;
+    }
+    if(!puede) return '';
+    return `<button onclick="openDocSlotModal(${i})" style="display:flex;align-items:center;justify-content:center;
+      gap:8px;background:transparent;border:2px dashed var(--line);border-radius:var(--radius-sm);padding:14px 16px;
+      margin-bottom:10px;color:var(--ink-faint);font-size:14px;font-weight:600;cursor:pointer;width:100%">
+      + Agregar documento</button>`;
+  }).join('');
+  return topLink + (cards || '<p class="empty-hint">Aún no hay documentos agregados.</p>');
+}
+function openDocSlotModal(i){
+  if(!puedeEditarDocs()) return;
+  const d = DOCUMENTOS[i] || {name:'', url:''};
+  document.getElementById('docModal').innerHTML = `
+    <h3>${DOCUMENTOS[i]?'Editar documento':'Agregar documento'}</h3>
+    <p class="m-sub">El enlace puede ser de Google Drive, Google Docs/Sheets, o cualquier link donde esté el archivo.</p>
+    <input type="hidden" id="dSlot" value="${i}">
+    <div class="field"><label>Nombre del documento</label><input id="dName" type="text" value="${escapeHtml(d.name||'')}" placeholder="Ej. Reglamento interno del personal"></div>
+    <div class="field"><label>Enlace</label><input id="dUrl" type="url" value="${escapeHtml(d.url||'')}" placeholder="https://drive.google.com/…"></div>
+    <div class="modal-actions">
+      ${DOCUMENTOS[i]?`<button class="btn-ghost" onclick="clearDocSlot(${i})">Quitar</button>`:''}
+      <button class="btn-ghost" onclick="closeDocSlotModal()">Cancelar</button>
+      <button class="btn-primary" onclick="saveDocSlot()">Guardar</button>
+    </div>`;
+  document.getElementById('docBg').classList.add('active');
+}
+function closeDocSlotModal(){ document.getElementById('docBg').classList.remove('active'); }
+function saveDocSlot(){
+  const i = Number(document.getElementById('dSlot').value);
+  const name = document.getElementById('dName').value.trim();
+  let url = document.getElementById('dUrl').value.trim();
+  if(!name){ toast('Ponle un nombre al documento'); return; }
+  if(url && !/^https?:\/\//i.test(url)) url = 'https://' + url;
+  DOCUMENTOS[i] = { name, url };
+  if(window.CLOUD) CLOUD.saveDocumentos(DOCUMENTOS);
+  closeDocSlotModal(); render();
+  toast('Documento guardado');
+}
+function clearDocSlot(i){
+  DOCUMENTOS[i] = null;
+  if(window.CLOUD) CLOUD.saveDocumentos(DOCUMENTOS);
+  closeDocSlotModal(); render();
+  toast('Documento eliminado');
 }
 
 /* ---------- DIRECTORIO / PERSONAL ---------- */
@@ -1854,9 +1920,9 @@ function toggleReminder(r){
 function onFilePick(input){
   const f=input.files&&input.files[0];
   if(!f) return;
-  // Vista previa inmediata con un object URL local; si hay Firebase Storage activo, al publicar
-  // se sube el archivo real (composeFile.raw) y este URL se reemplaza por el enlace permanente.
-  composeFile={name:f.name, url:URL.createObjectURL(f), raw:f};
+  // El nombre se guarda y se muestra; el archivo en sí no se sube a ningún lado (sin Storage/Blaze),
+  // así que el enlace solo sirve dentro de esta misma sesión mientras esté abierta la pestaña.
+  composeFile={name:f.name, url:URL.createObjectURL(f)};
   renderFileChip();
 }
 function removeFile(){
@@ -1895,7 +1961,7 @@ function openCompose(){
 }
 function closeCompose(){document.getElementById('modalBg').classList.remove('active');}
 
-async function publish(){
+function publish(){
   const title=document.getElementById('fTitle').value.trim();
   const body=document.getElementById('fBody').value.trim();
   const aud=document.getElementById('fAud').value;
@@ -1904,21 +1970,6 @@ async function publish(){
 
   const aviso={id:nextId++,title,body,prio:composePrio,aud,author:me.name,ts:Date.now(),read:[me.id]};
   if(composeFile) aviso.file=composeFile;
-
-  // Si hay un archivo real y Storage está disponible, lo subimos y reemplazamos el enlace temporal
-  // por uno permanente ANTES de guardar el aviso (así el link ya sirve para todos, no solo en esta sesión).
-  if(aviso.file && aviso.file.raw && window.CLOUD && CLOUD.subirArchivo){
-    const btn=document.querySelector('.btn-primary[onclick="publish()"]');
-    if(btn){ btn.disabled=true; btn.textContent='Subiendo documento…'; }
-    try{
-      const url = await CLOUD.subirArchivo(aviso.file.raw, aviso.id);
-      aviso.file = {name: aviso.file.name, url};
-    }catch(e){
-      toast('No se pudo subir el documento; el aviso se publica sin adjunto');
-      aviso.file = null;
-    }
-    if(btn){ btn.disabled=false; btn.textContent='Publicar aviso'; }
-  }
 
   if(composeScheduled){
     const dStr=document.getElementById('fDate').value;
@@ -1952,6 +2003,7 @@ function toast(msg){
 document.getElementById('modalBg').addEventListener('click',e=>{if(e.target.id==='modalBg')closeCompose();});
 document.getElementById('personBg').addEventListener('click',e=>{if(e.target.id==='personBg')closePersonModal();});
 document.getElementById('eventBg').addEventListener('click',e=>{if(e.target.id==='eventBg')closeEventModal();});
+document.getElementById('docBg').addEventListener('click',e=>{if(e.target.id==='docBg')closeDocSlotModal();});
 
 /* ---------- INIT ---------- */
 renderDemoUsers();
@@ -2072,13 +2124,11 @@ if (ACTIVE) {
 
   const V = 'https://www.gstatic.com/firebasejs/10.12.2';
   let initializeApp, getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged,
-      getFirestore, collection, getDocs, doc, setDoc, updateDoc, deleteDoc, arrayUnion,
-      getStorage, storageRef, uploadBytes, getDownloadURL;
+      getFirestore, collection, getDocs, getDoc, doc, setDoc, updateDoc, deleteDoc, arrayUnion;
   try {
     ({ initializeApp } = await import(`${V}/firebase-app.js`));
     ({ getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } = await import(`${V}/firebase-auth.js`));
-    ({ getFirestore, collection, getDocs, doc, setDoc, updateDoc, deleteDoc, arrayUnion } = await import(`${V}/firebase-firestore.js`));
-    ({ getStorage, ref: storageRef, uploadBytes, getDownloadURL } = await import(`${V}/firebase-storage.js`));
+    ({ getFirestore, collection, getDocs, getDoc, doc, setDoc, updateDoc, deleteDoc, arrayUnion } = await import(`${V}/firebase-firestore.js`));
   } catch (err) {
     console.error('No se pudo cargar Firebase:', err);
     showErr('No se pudo cargar Firebase. Abre la app desde su dirección web (https://…), no como archivo local, y revisa tu conexión.');
@@ -2088,7 +2138,6 @@ if (ACTIVE) {
   const app = initializeApp(CFG);
   const auth = getAuth(app);
   const db = getFirestore(app);
-  const storage = getStorage(app);
 
   document.getElementById('fbBtn').addEventListener('click', async () => {
     showErr('');
@@ -2117,7 +2166,9 @@ if (ACTIVE) {
     (await getDocs(collection(db, 'tareas_personales'))).forEach(s => ptareas.push({ id: s.id, ...s.data() }));
     (await getDocs(collection(db, 'mantenimiento'))).forEach(s => ordenes.push({ id: s.id, ...s.data() }));
     avisos.sort((a, b) => b.ts - a.ts);
-    return { usuarios, avisos, eventos, schedules, absences, ptareas, ordenes };
+    let documentos = null;
+    try { const dSnap = await getDoc(doc(db, 'config', 'documentos')); if (dSnap.exists()) documentos = dSnap.data().items || null; } catch (e) {}
+    return { usuarios, avisos, eventos, schedules, absences, ptareas, ordenes, documentos };
   }
 
   // --- Métodos de escritura que usa la app ---
@@ -2125,7 +2176,7 @@ if (ACTIVE) {
     title: a.title, body: a.body, prio: a.prio, aud: a.aud, author: a.author, ts: a.ts, read: a.read || [],
     notified: false, sentReminders: [],
     ...(a.event ? { event: { time: a.event.time || '', cat: a.event.cat, color: a.event.color, reminders: a.event.reminders || [], date: a.event.date.toISOString() } } : {}),
-    ...(a.file ? { file: { name: a.file.name, ...(a.file.url ? { url: a.file.url } : {}) } } : {})
+    ...(a.file ? { file: { name: a.file.name } } : {})
   });
   window.CLOUD = {
     saveAviso: a => { setDoc(doc(db, 'avisos', String(a.id)), serAviso(a)); if (a.event) setDoc(doc(db, 'eventos', 'ev_' + a.id), { title: a.title, cat: a.event.cat, color: a.event.color, date: a.event.date.toISOString() }); },
@@ -2138,13 +2189,7 @@ if (ACTIVE) {
     saveOrden: o => setDoc(doc(db, 'mantenimiento', String(o.id)), { title: o.title, desc: o.desc || '', loc: o.loc || '', prio: o.prio, reporter: o.reporter, reporterId: o.reporterId, ts: o.ts, status: o.status, ...(o.doneTs ? { doneTs: o.doneTs } : {}) }),
     saveUsuario: u => setDoc(doc(db, 'usuarios', String(u.id)), { name: u.name, email: u.email || '', role: u.role, roleLabel: u.roleLabel || '', area: u.area, ...(u.subarea ? { subarea: u.subarea } : {}), ...(u.canPublish ? { canPublish: true } : {}), ...(u.role==='docente' && Array.isArray(u.areas) && u.areas.length ? { areas: u.areas } : {}) }),
     removeUsuario: id => deleteDoc(doc(db, 'usuarios', String(id))),
-    // Sube el documento adjunto de un aviso a Storage y devuelve su enlace de descarga permanente.
-    subirArchivo: async (file, avisoId) => {
-      const path = `avisos/${avisoId}/${Date.now()}_${file.name}`;
-      const r = storageRef(storage, path);
-      await uploadBytes(r, file);
-      return await getDownloadURL(r);
-    },
+    saveDocumentos: items => setDoc(doc(db, 'config', 'documentos'), { items }),
     signOut: () => signOut(auth)
   };
 
