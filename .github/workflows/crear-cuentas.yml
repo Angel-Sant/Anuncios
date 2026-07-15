@@ -1,0 +1,34 @@
+name: Crear cuentas de acceso (Comunica)
+
+# Se corre SOLO a mano, desde la pestaña Actions -> este flujo -> "Run workflow".
+# Nunca se dispara solo ni por horario.
+on:
+  workflow_dispatch:
+    inputs:
+      contrasena_temporal:
+        description: 'Contraseña temporal para las cuentas NUEVAS que se creen (mínimo 6 caracteres)'
+        required: true
+        default: 'Bilbao2026'
+
+jobs:
+  crear:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar el repositorio
+        uses: actions/checkout@v4
+
+      - name: Preparar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Instalar dependencias
+        working-directory: notificador
+        run: npm install
+
+      - name: Crear cuentas faltantes
+        working-directory: notificador
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          TEMP_PASSWORD: ${{ github.event.inputs.contrasena_temporal }}
+        run: node crear-cuentas.js
